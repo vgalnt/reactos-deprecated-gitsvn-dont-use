@@ -31,6 +31,7 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
 
   COMMON_ATAX_DEVICE_EXTENSION   CommonExtension;          // Общее и для PDO и для FDO расширений
 
+  ULONG                    Channel;                           // Номер канала
 
 } FDO_CHANNEL_EXTENSION, *PFDO_CHANNEL_EXTENSION;
 
