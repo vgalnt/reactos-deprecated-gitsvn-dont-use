@@ -61,10 +61,10 @@ AtaXDispatchPnp(
     IN PDEVICE_OBJECT DeviceObject,
     IN PIRP Irp)
 {
-ASSERT(FALSE);
   if ( ((PCOMMON_ATAX_DEVICE_EXTENSION)DeviceObject->DeviceExtension)->IsFDO )
-    return 0;//AtaXChannelFdoDispatchPnp(DeviceObject, Irp);
+    return AtaXChannelFdoDispatchPnp(DeviceObject, Irp);
   else
+ASSERT(FALSE);
     return 0;//AtaXDevicePdoDispatchPnp(DeviceObject, Irp);
 }
 
@@ -87,6 +87,31 @@ AtaXCompleteIrp(
   return STATUS_SUCCESS;
 }
 
+VOID
+AtaXCreateIdeDirectory(VOID)
+{
+  OBJECT_ATTRIBUTES  ObjectAttributes;
+  UNICODE_STRING     ObjectName;
+  HANDLE             DirectoryHandle;
+  NTSTATUS           Result;
+
+  RtlInitUnicodeString(&ObjectName, L"\\Device\\Ide");
+
+  InitializeObjectAttributes(
+                     &ObjectAttributes,
+                     &ObjectName,
+                     OBJ_CASE_INSENSITIVE | OBJ_PERMANENT,
+                     NULL,
+                     NULL);
+
+  Result = ZwCreateDirectoryObject(
+                     &DirectoryHandle,
+                     DIRECTORY_ALL_ACCESS,
+                     &ObjectAttributes);
+
+  DPRINT("AtaXCreateIdeDirectory Result - %p \n", Result);
+}
+
 NTSTATUS NTAPI
 DriverEntry(
     IN PDRIVER_OBJECT DriverObject,
@@ -105,6 +130,9 @@ DriverEntry(
   DriverObject->MajorFunction[IRP_MJ_POWER]                   = AtaXCompleteIrp;           // AtaXDispatchPower;
   DriverObject->MajorFunction[IRP_MJ_SYSTEM_CONTROL]          = AtaXCompleteIrp;           // AtaXDispatchSystemControl;
   DriverObject->MajorFunction[IRP_MJ_PNP]                     = AtaXDispatchPnp;
+
+  // Создаем директорию "\Device\Ide"
+  AtaXCreateIdeDirectory();
 
   DPRINT1("ATAX DriverEntry: return STATUS_SUCCESS\n" );
   return STATUS_SUCCESS;
