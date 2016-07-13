@@ -1,0 +1,8 @@
+; AtaX driver
+[AddReg]
+HKLM,"SYSTEM\CurrentControlSet\Services\AtaX","ErrorControl",0x00010001,0x00000000
+HKLM,"SYSTEM\CurrentControlSet\Services\AtaX","Group",0x00000000,"SCSI Miniport"
+HKLM,"SYSTEM\CurrentControlSet\Services\AtaX","ImagePath",0x00020000,"system32\drivers\atax.sys"
+HKLM,"SYSTEM\CurrentControlSet\Services\AtaX","Start",0x00010001,0x00000000
+HKLM,"SYSTEM\CurrentControlSet\Services\AtaX","Type",0x00010001,0x00000001
+HKLM,"SYSTEM\CurrentControlSet\Services\AtaX","Tag",0x00010001,0x00000020
