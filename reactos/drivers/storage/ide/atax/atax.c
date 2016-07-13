@@ -4,6 +4,9 @@
 #include <debug.h>
 
 
+ULONG AtaXChannelCounter  = 0;
+
+
 DRIVER_UNLOAD AtaXUnload;
 VOID NTAPI 
 AtaXUnload(IN PDRIVER_OBJECT DriverObject)
