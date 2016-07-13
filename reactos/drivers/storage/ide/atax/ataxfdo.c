@@ -7,6 +7,24 @@
 ULONG  AtaXDeviceCounter = 0;
 
 
+NTSTATUS
+AtaXPassDownIrpAndForget(
+    IN PDEVICE_OBJECT DeviceObject,
+    IN PIRP Irp)
+{
+  PDEVICE_OBJECT LowerDevice;
+  
+  ASSERT(((PCOMMON_ATAX_DEVICE_EXTENSION)DeviceObject->DeviceExtension)->IsFDO);
+  LowerDevice = ((PFDO_CHANNEL_EXTENSION)
+                 DeviceObject->DeviceExtension)->CommonExtension.LowerDevice;
+  ASSERT(LowerDevice);
+  
+  IoSkipCurrentIrpStackLocation(Irp);
+
+  DPRINT("Calling lower device %p [%wZ]\n", LowerDevice, &LowerDevice->DriverObject->DriverName);
+  return IoCallDriver(LowerDevice, Irp);
+}
+
 NTSTATUS NTAPI
 AddChannelFdo(
     IN PDRIVER_OBJECT DriverObject,
