@@ -25,6 +25,110 @@ AtaXPassDownIrpAndForget(
   return IoCallDriver(LowerDevice, Irp);
 }
 
+NTSTATUS
+AtaXChannelFdoDispatchPnp(
+    IN PDEVICE_OBJECT AtaXChannelFdo,
+    IN PIRP Irp)
+{
+  PIO_STACK_LOCATION  Stack = IoGetCurrentIrpStackLocation(Irp);
+  ULONG               MinorFunction = Stack->MinorFunction;
+  NTSTATUS            Status;
+
+  switch ( MinorFunction )
+  {
+    case IRP_MN_START_DEVICE:                 /* 0x00 */  //AtaXChannelFdoStartDevice
+    {
+      DPRINT("IRP_MJ_PNP / IRP_MN_START_DEVICE\n");
+ASSERT(FALSE);
+//      Status = AtaXChannelFdoStartDevice(AtaXChannelFdo, Irp);
+      break;
+    }
+
+    case IRP_MN_QUERY_REMOVE_DEVICE:          /* 0x01 */
+    case IRP_MN_CANCEL_REMOVE_DEVICE:         /* 0x03 */
+    case IRP_MN_QUERY_STOP_DEVICE:            /* 0x05 */
+    case IRP_MN_CANCEL_STOP_DEVICE:           /* 0x06 */  //AtaSuccessAndPassDownIrpAndForget
+    {
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY(CANCEL)_REMOVE(STOP)_DEVICE\n");
+      Irp->IoStatus.Status = STATUS_SUCCESS;
+      return AtaXPassDownIrpAndForget(AtaXChannelFdo, Irp);
+    }
+
+    case IRP_MN_REMOVE_DEVICE:                /* 0x02 */  //AtaXChannelFdoRemoveDevice
+    {
+      DPRINT("IRP_MJ_PNP / IRP_MN_REMOVE_DEVICE\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXChannelFdoRemoveDevice(AtaXChannelFdo, Irp);
+      break;
+    }
+
+    case IRP_MN_STOP_DEVICE:                  /* 0x04 */  //AtaXChannelFdoStopDevice
+    {
+      DPRINT("IRP_MJ_PNP / IRP_MN_STOP_DEVICE\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXChannelFdoStopDevice(AtaXChannelFdo, Irp);
+      break;
+    }
+
+    case IRP_MN_QUERY_DEVICE_RELATIONS:       /* 0x07 */  //AtaXChannelFdoQueryDeviceRelations
+    {
+      switch (Stack->Parameters.QueryDeviceRelations.Type)
+      {
+        case BusRelations:
+          DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_RELATIONS / BusRelations\n");
+ASSERT(FALSE);
+//          Status = AtaXChannelFdoQueryDeviceRelations(AtaXChannelFdo, Irp);
+          break;
+        
+        default:
+          DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_RELATIONS / Unknown type 0x%lx\n", Stack->Parameters.QueryDeviceRelations.Type);
+          return AtaXPassDownIrpAndForget(AtaXChannelFdo, Irp);
+      }
+      break;
+    }
+
+    case IRP_MN_FILTER_RESOURCE_REQUIREMENTS: /* 0x0d */  //AtaXChannelFdoFilterResourceRequirements
+    {
+      DPRINT("IRP_MJ_PNP / IRP_MN_FILTER_RESOURCE_REQUIREMENTS\n");
+      return AtaXPassDownIrpAndForget(AtaXChannelFdo, Irp);
+    }
+
+    case IRP_MN_QUERY_PNP_DEVICE_STATE:       /* 0x14 */  //AtaXChannelFdoQueryPnPDeviceState
+    {
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_PNP_DEVICE_STATE\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXChannelFdoQueryPnPDeviceState(AtaXChannelFdo, Irp);
+      break;
+    }
+
+    case IRP_MN_DEVICE_USAGE_NOTIFICATION:    /* 0x16 */  //AtaXChannelFdoUsageNotification
+    {
+      DPRINT("IRP_MJ_PNP / IRP_MN_DEVICE_USAGE_NOTIFICATION\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXChannelFdoUsageNotification(AtaXChannelFdo, Irp);
+      break;
+    }
+
+    case IRP_MN_SURPRISE_REMOVAL:             /* 0x17 */  //AtaXChannelFdoSurpriseRemoveDevice
+    {
+      DPRINT("IRP_MJ_PNP / IRP_MN_SURPRISE_REMOVAL\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXChannelFdoSurpriseRemoveDevice(AtaXChannelFdo, Irp);
+      break;
+    }
+
+    default:
+    {
+      DPRINT1("IRP_MJ_PNP / Unknown minor function 0x%lx\n", MinorFunction);
+      return AtaXPassDownIrpAndForget(AtaXChannelFdo, Irp);
+    }
+  }
+
+  Irp->IoStatus.Status = Status;
+  IoCompleteRequest(Irp, IO_NO_INCREMENT);
+  return Status;
+}
+
 NTSTATUS NTAPI
 AddChannelFdo(
     IN PDRIVER_OBJECT DriverObject,
