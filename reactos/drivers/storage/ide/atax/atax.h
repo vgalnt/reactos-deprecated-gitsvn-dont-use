@@ -6,6 +6,17 @@
 #include <wdm.h>
 
 
+//
+// Определениe глобальных переменных
+//
+
+extern ULONG AtaXDeviceCounter;  // Нумерация устройств
+extern ULONG AtaXChannelCounter; // Нумерация каналов
+
+//
+// Определениe структур
+//
+
 typedef struct _COMMON_ATAX_DEVICE_EXTENSION { 
 
   PDEVICE_OBJECT  LowerDevice; // Если ниже в стеке есть Filter DO, то указатель на Filter DO, если нет, то указатель на нижний PDO. (Только для FDO. Для PDO будет NULL)
