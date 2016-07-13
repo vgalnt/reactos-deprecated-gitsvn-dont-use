@@ -8,8 +8,11 @@
 
 #include "pciide.h"
 
-#define NDEBUG
+//#define NDEBUG
 #include <debug.h>
+
+#define UDMA_MODE5  (1 << 16)
+#define UDMA_MODE6  (1 << 17)
 
 IDE_CHANNEL_STATE NTAPI
 PciIdeChannelEnabled(
@@ -108,7 +111,7 @@ PciIdeGetControllerProperties(
 		PIO_MODE0 | PIO_MODE1 | PIO_MODE2 | PIO_MODE3 | PIO_MODE4 |
 		SWDMA_MODE0 | SWDMA_MODE1 | SWDMA_MODE2 |
 		MWDMA_MODE0 | MWDMA_MODE1 | MWDMA_MODE2 |
-		UDMA_MODE0 | UDMA_MODE1 | UDMA_MODE2 | UDMA_MODE3 | UDMA_MODE4;
+		UDMA_MODE0 | UDMA_MODE1 | UDMA_MODE2 | UDMA_MODE3 | UDMA_MODE4 | UDMA_MODE5 | UDMA_MODE6;
 
 	return STATUS_SUCCESS;
 }
