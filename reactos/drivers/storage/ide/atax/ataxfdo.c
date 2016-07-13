@@ -25,6 +25,21 @@ AtaXPassDownIrpAndForget(
   return IoCallDriver(LowerDevice, Irp);
 }
 
+IO_COMPLETION_ROUTINE AtaXGenericCompletion;
+NTSTATUS NTAPI 
+AtaXGenericCompletion(
+    IN PDEVICE_OBJECT DeviceObject,
+    IN PIRP Irp,
+    IN PVOID Context)
+{
+  //DPRINT("AtaXGenericCompletionRoutine \n" );
+
+  if ( Irp->PendingReturned )
+    KeSetEvent((PKEVENT)Context, IO_NO_INCREMENT, FALSE);
+
+  return STATUS_MORE_PROCESSING_REQUIRED;
+}
+
 NTSTATUS
 AtaXChannelFdoDispatchPnp(
     IN PDEVICE_OBJECT AtaXChannelFdo,
@@ -39,8 +54,7 @@ AtaXChannelFdoDispatchPnp(
     case IRP_MN_START_DEVICE:                 /* 0x00 */  //AtaXChannelFdoStartDevice
     {
       DPRINT("IRP_MJ_PNP / IRP_MN_START_DEVICE\n");
-ASSERT(FALSE);
-//      Status = AtaXChannelFdoStartDevice(AtaXChannelFdo, Irp);
+      Status = AtaXChannelFdoStartDevice(AtaXChannelFdo, Irp);
       break;
     }
 
