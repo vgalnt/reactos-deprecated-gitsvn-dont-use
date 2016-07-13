@@ -6,7 +6,7 @@
 
 DRIVER_UNLOAD AtaXUnload;
 VOID NTAPI 
-AtaXUnload(PDRIVER_OBJECT DriverObject)
+AtaXUnload(IN PDRIVER_OBJECT DriverObject)
 {
   DPRINT1("ATAX Unload FIXME \n");
 }
@@ -30,7 +30,7 @@ DriverEntry(
 {
   DPRINT1("ATAX DriverEntry(%p '%wZ')\n", DriverObject, RegistryPath);
 
-  DriverObject->DriverExtension->AddDevice = 0;//AddChannelFdo;
+  DriverObject->DriverExtension->AddDevice = AddChannelFdo;
   DriverObject->DriverUnload               = AtaXUnload;
   DriverObject->DriverStartIo              = 0;//AtaXStartIo;
 

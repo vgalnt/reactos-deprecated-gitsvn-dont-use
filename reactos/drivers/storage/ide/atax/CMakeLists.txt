@@ -1,6 +1,7 @@
 
 list(APPEND SOURCE
     atax.c
+    ataxfdo.c
     atax.h)
 
 add_library(atax SHARED ${SOURCE} atax.rc)
