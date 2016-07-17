@@ -215,6 +215,58 @@ AtaXQueryControllerProperties(
   return Status;
 }
 
+NTSTATUS
+AtaXQueryBusMasterInterface(IN PDEVICE_OBJECT AtaXChannelFdo)
+{
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  KEVENT                  Event;
+  NTSTATUS                Status;
+  PIRP                    Irp;
+  IO_STATUS_BLOCK         IoStatus;
+  PIO_STACK_LOCATION      Stack;
+
+  DPRINT("AtaXQueryBusMasterInterface: ... \n");
+
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXChannelFdo->DeviceExtension;
+
+  KeInitializeEvent(&Event, NotificationEvent, FALSE);
+
+  Irp = IoBuildSynchronousFsdRequest(
+               IRP_MJ_PNP,
+               AtaXChannelFdoExtension->CommonExtension.LowerDevice,
+               NULL,
+               0,
+               NULL,
+               &Event,
+               &IoStatus);
+
+  if ( Irp == NULL )
+    return STATUS_INSUFFICIENT_RESOURCES;
+
+  Stack = IoGetNextIrpStackLocation(Irp);
+
+  Stack->MajorFunction = IRP_MJ_PNP;
+  Stack->MinorFunction = IRP_MN_QUERY_INTERFACE;
+
+  Stack->Parameters.QueryInterface.Size = 5; // тип интерфейса = QueryBusMasterInterface
+  Stack->Parameters.QueryInterface.InterfaceType = (LPGUID)&GUID_BUS_INTERFACE_STANDARD;
+  Stack->Parameters.QueryInterface.Version = 1; //не используется
+  Stack->Parameters.QueryInterface.Interface = (PINTERFACE)&AtaXChannelFdoExtension->BusMasterInterface;
+  Stack->Parameters.QueryInterface.InterfaceSpecificData = NULL; //не используется
+
+  Irp->IoStatus.Status = STATUS_NOT_SUPPORTED;
+
+  Status = IoCallDriver(AtaXChannelFdoExtension->CommonExtension.LowerDevice, Irp);  // call pciide
+
+  if ( Status == STATUS_PENDING )
+  {
+    KeWaitForSingleObject(&Event, Executive, KernelMode, FALSE, NULL);
+    Status = IoStatus.Status;
+  }
+
+  return Status;
+}
+
 NTSTATUS 
 AtaXParseTranslatedResources(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
