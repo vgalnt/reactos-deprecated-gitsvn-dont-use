@@ -245,6 +245,16 @@ AtaXChannelInterrupt(
   return 0;
 }
 
+VOID NTAPI
+AtaXDpc(
+    IN PKDPC Dpc,
+    IN PDEVICE_OBJECT AtaXChannelFdo,
+    IN PVOID SystemArgument1,
+    IN PVOID SystemArgument2)
+{
+ASSERT(FALSE);
+}
+
 NTSTATUS
 AtaXChannelFdoStartDevice(
     IN PDEVICE_OBJECT AtaXChannelFdo,
@@ -333,7 +343,31 @@ AtaXChannelFdoStartDevice(
     
     if ( NT_SUCCESS(Status) )
     {
+       // Разрешаем прерывания
+       WRITE_PORT_UCHAR(AtaXChannelFdoExtension->BaseIoAddress2.DeviceControl, 0); //Bit 1 (nIEN): 0 - Enable Interrupt, 1 - Disable Interrupt
+
+       KeInitializeSpinLock(&AtaXChannelFdoExtension->SpinLock);
+
+       KeInitializeDpc(&AtaXChannelFdoExtension->Dpc,
+                       (PKDEFERRED_ROUTINE)AtaXDpc,
+                       AtaXChannelFdo);
+
+       AtaXChannelFdoExtension->Flags |= ATAX_DISCONNECT_ALLOWED;  // set flag that it's allowed to disconnect during this command
+
+       if ( AtaXChannelFdoExtension->ChannelState == ChannelDisabled )
+       {
+         Status = AtaXQueryControllerProperties(AtaXChannelFdo);  // запрос конфигурационной информации IDE контроллера
+         DPRINT("AtaXChannelFdoStartDevice: AtaXQueryControllerProperties return Status - %p\n", Status);
+
+         Status = AtaXQueryBusMasterInterface(AtaXChannelFdo);
+         DPRINT("AtaXChannelFdoStartDevice: AtaXQueryBusMasterInterface return Status - %p\n", Status);
+
+         AtaXChannelFdoExtension->ChannelState = ChannelEnabled;
+       }
+
 ASSERT(FALSE);
+       // Создаем символические ссылки
+       //Status = AtaXCreateSymLinks(AtaXChannelFdoExtension);
     }
   }
 else
