@@ -126,8 +126,10 @@ AtaXQueryBusInterface(IN PDEVICE_OBJECT AtaXChannelFdo)
   return Status;
 }
 
-static NTSTATUS NTAPI 
-AtaXParseTranslatedResources(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension, IN PCM_RESOURCE_LIST ResourcesTranslated)
+NTSTATUS 
+AtaXParseTranslatedResources(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PCM_RESOURCE_LIST ResourcesTranslated)
 {
   ULONG     jx;
   ULONG     AddressLength = 0;
@@ -201,15 +203,9 @@ AtaXParseTranslatedResources(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension, 
       {
         AtaXChannelFdoExtension->InterruptShareDisposition = Descriptor->ShareDisposition;
 
-        if ( AtaXChannelFdoExtension->SataInterface.Size )
+        if ( 0)//AtaXChannelFdoExtension->SataInterface.Size )
         {
-          PSATA_INTERRUPT_RESOURCE  InterruptResource = AtaXChannelFdoExtension->SataInterface.InterruptResource;
-
-          AtaXChannelFdoExtension->InterruptShareDisposition = InterruptResource->InterruptShareDisposition;
-          AtaXChannelFdoExtension->InterruptFlags            = InterruptResource->InterruptFlags;
-          AtaXChannelFdoExtension->InterruptLevel            = InterruptResource->InterruptLevel;
-          AtaXChannelFdoExtension->InterruptVector           = InterruptResource->InterruptVector;
-          AtaXChannelFdoExtension->InterruptAffinity         = InterruptResource->InterruptAffinity;
+ASSERT(FALSE);
         }
         else
         {
@@ -238,6 +234,15 @@ AtaXParseTranslatedResources(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension, 
   }
 
   return Status;
+}
+
+BOOLEAN 
+AtaXChannelInterrupt(
+    IN PKINTERRUPT Interrupt,
+    IN PVOID ServiceContext)
+{
+  ASSERT(FALSE);
+  return 0;
 }
 
 NTSTATUS
@@ -299,12 +304,37 @@ AtaXChannelFdoStartDevice(
   Status = AtaXQueryBusInterface(AtaXChannelFdo);
   DPRINT("AtaXChannelFdoStartDevice: AtaXQueryBusInterface return Status - %p\n", Status);
 
-ASSERT(FALSE);
   Status = AtaXParseTranslatedResources(AtaXChannelFdoExtension, ResourcesTranslated);
 
   if ( NT_SUCCESS(Status) && AtaXChannelFdoExtension->InterruptLevel )
   {
+    Status = IoConnectInterrupt(
+               &AtaXChannelFdoExtension->InterruptObject,                                    // OUT PKINTERRUPT       *InterruptObject,
+               (PKSERVICE_ROUTINE)AtaXChannelInterrupt,                                      // IN PKSERVICE_ROUTINE  ServiceRoutine,
+               AtaXChannelFdoExtension->CommonExtension.SelfDevice,                          // IN PVOID              ServiceContext,
+               NULL,                                                                         // IN PKSPIN_LOCK        SpinLock         OPTIONAL,
+               AtaXChannelFdoExtension->InterruptVector,                                     // IN ULONG              Vector,
+               AtaXChannelFdoExtension->InterruptLevel,                                      // IN KIRQL              Irql,
+               AtaXChannelFdoExtension->InterruptLevel,                                      // IN KIRQL              SynchronizeIrql,
+               (KINTERRUPT_MODE)(AtaXChannelFdoExtension->InterruptFlags & 1),               // IN KINTERRUPT_MODE    InterruptMode,
+               AtaXChannelFdoExtension->InterruptShareDisposition == CmResourceShareShared,  // IN BOOLEAN            ShareVector,
+               AtaXChannelFdoExtension->InterruptAffinity,                                   // IN KAFFINITY          ProcessorEnableMask,
+               FALSE);                                                                       // IN BOOLEAN            FloatingSave
+
+    DPRINT("IoConnectInterrupt: Status           - %x \n", Status);
+    DPRINT("IoConnectInterrupt: *InterruptObject - %p \n", *(PULONG)AtaXChannelFdoExtension->InterruptObject);
+    DPRINT("IoConnectInterrupt:  InterruptObject - %p \n", AtaXChannelFdoExtension->InterruptObject);
+
+    DPRINT("Vector              - %x \n", AtaXChannelFdoExtension->InterruptVector);
+    DPRINT("Irql                - %x \n", AtaXChannelFdoExtension->InterruptLevel);
+    DPRINT("InterruptMode       - %x \n", (KINTERRUPT_MODE)(AtaXChannelFdoExtension->InterruptFlags & 1) );
+    DPRINT("ShareVector         - %x \n", AtaXChannelFdoExtension->InterruptShareDisposition == CmResourceShareShared );
+    DPRINT("ProcessorEnableMask - %x \n", AtaXChannelFdoExtension->InterruptAffinity);
+    
+    if ( NT_SUCCESS(Status) )
+    {
 ASSERT(FALSE);
+    }
   }
 else
   {
