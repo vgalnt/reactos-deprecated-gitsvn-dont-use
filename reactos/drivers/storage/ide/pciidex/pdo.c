@@ -9,8 +9,9 @@
 #include "pciidex.h"
 
 #include <stdio.h>
+#include <wdmguid.h>
 
-#define NDEBUG
+//#define NDEBUG
 #include <debug.h>
 
 static NTSTATUS
@@ -363,6 +364,8 @@ PciIdeXPdoPnpDispatch(
 	ULONG MinorFunction;
 	PIO_STACK_LOCATION Stack;
 	ULONG_PTR Information = Irp->IoStatus.Information;
+	PFDO_DEVICE_EXTENSION FdoDeviceExtension;
+	PPDO_DEVICE_EXTENSION DeviceExtension;
 	NTSTATUS Status;
 
 	Stack = IoGetCurrentIrpStackLocation(Irp);
@@ -434,6 +437,60 @@ PciIdeXPdoPnpDispatch(
 				}
 			}
 			break;
+		}
+		case IRP_MN_QUERY_INTERFACE: /* 0x08 */
+		{
+			DeviceExtension = (PPDO_DEVICE_EXTENSION)DeviceObject->DeviceExtension;
+			FdoDeviceExtension = (PFDO_DEVICE_EXTENSION)DeviceExtension->ControllerFdo->DeviceExtension;
+
+			// HACK! QueryInterface.Size - type Interface.
+			if (IsEqualGUIDAligned(Stack->Parameters.QueryInterface.InterfaceType, &GUID_BUS_INTERFACE_STANDARD))
+			{
+				switch (Stack->Parameters.QueryInterface.Size)
+				{
+					case 1: // QueryControllerProperties
+						DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QueryControllerProperties\n");
+						ASSERT(FALSE);
+						Status = STATUS_SUCCESS;
+						break;
+
+					case 3: // QueryPciBusInterface
+						DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QueryPciBusInterface\n");
+						*(PVOID *)Stack->Parameters.QueryInterface.Interface = FdoDeviceExtension->BusInterface;
+                                                DPRINT("PciIdeXPdoPnpDispatch: BusInterface - %p\n", FdoDeviceExtension->BusInterface);
+						Status = STATUS_SUCCESS;
+						break;
+
+					case 5: // QueryBusMasterInterface
+						DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QueryBusMasterInterface\n");
+						ASSERT(FALSE);
+						break;
+
+					case 7: // QueryAhciInterface
+						DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QueryAhciInterface. NOT_SUPPORTED\n");
+						ASSERT(FALSE);
+						Status = STATUS_NOT_SUPPORTED;
+						break;
+
+					case 9: // QuerySataInterface
+						DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QuerySataInterface.\n");
+						ASSERT(FALSE);
+						break;
+
+					default:
+						DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / Unknown Size\n");
+						Status = STATUS_NOT_SUPPORTED;
+						break;
+				}
+				break;
+			}
+			else
+			{
+				DPRINT1("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / Unknown type\n");
+				ASSERT(FALSE);
+				Status = STATUS_NOT_SUPPORTED;
+				break;
+			}
 		}
 		case IRP_MN_QUERY_CAPABILITIES: /* 0x09 */
 		{
