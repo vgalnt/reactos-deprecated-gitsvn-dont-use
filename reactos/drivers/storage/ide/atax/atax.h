@@ -7,6 +7,7 @@
 #include <ide.h>
 #include <initguid.h>
 #include <wdmguid.h>
+#include <..\bmaster.h>
 
 
 //
@@ -15,6 +16,11 @@
 
 extern ULONG AtaXDeviceCounter;  // Нумерация устройств
 extern ULONG AtaXChannelCounter; // Нумерация каналов
+
+//
+// Flags
+//
+#define ATAX_DISCONNECT_ALLOWED      0x00001000
 
 //
 // Определениe структур
@@ -66,6 +72,16 @@ typedef struct _ATAX_REGISTERS_2 {        //// Адреса блока регистров управления
 
 } ATAX_REGISTERS_2, *PATAX_REGISTERS_2;
 
+typedef struct _HW_DEVICE_EXTENSION {                     //// Аппаратное расширение устройств канала
+
+  PCIIDE_TRANSFER_MODE_SELECT  TransferInfo;               // Информация о режимах пересылки данных
+
+  // Controller properties
+  PIDE_CONTROLLER_PROPERTIES   ControllerProperties;       // !!! 1.Указатель на конфигурационную информацию IDE контроллера 
+  PUCHAR                       MiniControllerExtension;    // !!! 2.Указатель на расширение устройства минидрайвера IDE контроллера (должен стоять сразу после ControllerProperties)
+
+} HW_DEVICE_EXTENSION, *PHW_DEVICE_EXTENSION;
+
 typedef struct _COMMON_ATAX_DEVICE_EXTENSION { 
 
   PDEVICE_OBJECT  LowerDevice; // Если ниже в стеке есть Filter DO, то указатель на Filter DO, если нет, то указатель на нижний PDO. (Только для FDO. Для PDO будет NULL)
@@ -80,12 +96,17 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
 
   COMMON_ATAX_DEVICE_EXTENSION   CommonExtension;          // Общее и для PDO и для FDO расширений
 
+  ULONG                    Flags;                             // Флаги FDO расширения 
   ULONG                    Channel;                           // Номер канала
+  IDE_CHANNEL_STATE        ChannelState;                      // Состояние канала
   ATAX_REGISTERS_1         BaseIoAddress1;                    // Список адресов (или портов) для блока командных регистров
   ATAX_REGISTERS_2         BaseIoAddress2;                    // Список адресов (или портов) для блока регистров управления (используется только первый)
+  KDPC                     Dpc;
+  KSPIN_LOCK               SpinLock;
 
   // Interfaces
   PBUS_INTERFACE_STANDARD  BusInterface;
+  BUS_MASTER_INTERFACE     BusMasterInterface;
 
   // IoConnectInterrupt() 
   PKINTERRUPT              InterruptObject;
@@ -96,6 +117,7 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
   UCHAR                    Padded1;
   KAFFINITY                InterruptAffinity;
 
+  HW_DEVICE_EXTENSION      HwDeviceExtension;                 // Параметры контроллера
 
 } FDO_CHANNEL_EXTENSION, *PFDO_CHANNEL_EXTENSION;
 
