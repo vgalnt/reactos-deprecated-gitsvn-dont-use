@@ -167,8 +167,174 @@ PciIdeXAddDevice(
 		return STATUS_IO_DEVICE_ERROR;
 	}
 
+	///*
+	DPRINT("PciConfig.VendorID                 - %x\n", PciConfig.VendorID);
+	DPRINT("PciConfig.DeviceID                 - %x\n", PciConfig.DeviceID);
+	DPRINT("PciConfig.Command                  - %x\n", PciConfig.Command);
+	DPRINT("PciConfig.Status                   - %x\n", PciConfig.Status);
+	DPRINT("PciConfig.RevisionID               - %x\n", PciConfig.RevisionID);
+	DPRINT("PciConfig.ProgIf                   - %x\n", PciConfig.ProgIf);
+	DPRINT("PciConfig.SubClass                 - %x\n", PciConfig.SubClass);
+	DPRINT("PciConfig.BaseClass                - %x\n", PciConfig.BaseClass);
+	DPRINT("PciConfig.CacheLineSize            - %x\n", PciConfig.CacheLineSize);
+	DPRINT("PciConfig.LatencyTimer             - %x\n", PciConfig.LatencyTimer);
+	DPRINT("PciConfig.HeaderType               - %x\n", PciConfig.HeaderType);
+	DPRINT("PciConfig.BIST                     - %x\n", PciConfig.BIST);
+	DPRINT("PciConfig.u.type0.BaseAddresses[0] - %x\n", PciConfig.u.type0.BaseAddresses[0]);
+	DPRINT("PciConfig.u.type0.BaseAddresses[1] - %x\n", PciConfig.u.type0.BaseAddresses[1]);
+	DPRINT("PciConfig.u.type0.BaseAddresses[2] - %x\n", PciConfig.u.type0.BaseAddresses[2]);
+	DPRINT("PciConfig.u.type0.BaseAddresses[3] - %x\n", PciConfig.u.type0.BaseAddresses[3]);
+	DPRINT("PciConfig.u.type0.BaseAddresses[4] - %x\n", PciConfig.u.type0.BaseAddresses[4]);
+	DPRINT("PciConfig.u.type0.BaseAddresses[5] - %x\n", PciConfig.u.type0.BaseAddresses[5]);
+	DPRINT("PciConfig.u.type0.CIS              - %x\n", PciConfig.u.type0.CIS);
+	DPRINT("PciConfig.u.type0.SubVendorID      - %x\n", PciConfig.u.type0.SubVendorID);
+	DPRINT("PciConfig.u.type0.SubSystemID      - %x\n", PciConfig.u.type0.SubSystemID);
+	DPRINT("PciConfig.u.type0.ROMBaseAddress   - %x\n", PciConfig.u.type0.ROMBaseAddress);
+	DPRINT("PciConfig.u.type0.CapabilitiesPtr  - %x\n", PciConfig.u.type0.CapabilitiesPtr);
+	DPRINT("PciConfig.u.type0.Reserved1[0]     - %x\n", PciConfig.u.type0.Reserved1[0]);
+	DPRINT("PciConfig.u.type0.Reserved1[1]     - %x\n", PciConfig.u.type0.Reserved1[1]);
+	DPRINT("PciConfig.u.type0.Reserved1[2]     - %x\n", PciConfig.u.type0.Reserved1[2]);
+	DPRINT("PciConfig.u.type0.Reserved2        - %x\n", PciConfig.u.type0.Reserved2);
+	DPRINT("PciConfig.u.type0.InterruptLine    - %x\n", PciConfig.u.type0.InterruptLine);
+	DPRINT("PciConfig.u.type0.InterruptPin     - %x\n", PciConfig.u.type0.InterruptPin);
+	DPRINT("PciConfig.u.type0.MinimumGrant     - %x\n", PciConfig.u.type0.MinimumGrant);
+	DPRINT("PciConfig.u.type0.MaximumLatency   - %x\n", PciConfig.u.type0.MaximumLatency);
+	//*/
+
 	DeviceExtension->VendorId = PciConfig.VendorID;
 	DeviceExtension->DeviceId = PciConfig.DeviceID;
+
+	DeviceExtension->ControllerMode[PRIMARY_CHANNEL]   = 
+        DeviceExtension->ControllerMode[SECONDARY_CHANNEL] = FALSE; // compatible BM PCI IDE mode 
+
+        if ((PciConfig.BaseClass == PCI_CLASS_MASS_STORAGE_CTLR) &&
+            (PciConfig.SubClass  == PCI_SUBCLASS_MSC_IDE_CTLR))
+        {
+		UCHAR PrimaryMode, SecondaryMode, PrimaryFixed, SecondaryFixed, ProgIf;
+
+		ProgIf = PciConfig.ProgIf;
+
+		if (!(ProgIf & 0x80))
+		{
+			DeviceExtension->BusMasterBase = 0;
+			Fdo->Flags &= ~DO_DEVICE_INITIALIZING;
+			return STATUS_SUCCESS;
+		}
+
+	 	if (PciConfig.u.type0.BaseAddresses[4] == 0)
+	 	{
+			if ((PciConfig.u.type0.BaseAddresses[0] & PCI_ADDRESS_MEMORY_TYPE_MASK) == PCI_TYPE_64BIT)
+			{
+				DPRINT("PciIdeXAddDevice: FIXME - found SATA DPA mode. BaseAddresses[0] - %x\n", PciConfig.u.type0.BaseAddresses[0]);
+			}
+
+			Fdo->Flags &= ~DO_DEVICE_INITIALIZING;
+			return STATUS_SUCCESS;
+	 	}
+
+		PrimaryMode    = (ProgIf & 1) == 1; // Primary channel mode is PCI (native mode)
+		PrimaryFixed   = (ProgIf & 2) == 0; // Primary channel mode can changed == FALSE
+		SecondaryMode  = (ProgIf & 4) == 4; // Secondary channel mode is PCI (native mode)
+		SecondaryFixed = (ProgIf & 8) == 0; // Secondary channel mode can changed == FALSE
+
+	 	if (PciConfig.u.type0.BaseAddresses[4] & PCI_ADDRESS_IO_SPACE)
+	 	{
+	 		DPRINT("PciIdeXAddDevice: found Bus Master controller!\n");
+	 		DeviceExtension->BusMasterBase = PciConfig.u.type0.BaseAddresses[4] & PCI_ADDRESS_IO_ADDRESS_MASK;
+	 		DPRINT("PciIdeXAddDevice: Bus Master Registers at IO %lx\n", DeviceExtension->BusMasterBase);
+
+			/*
+			 * [..] In order for Windows XP SP1 and Windows Server 2003 to switch an ATA
+			 * ATA controller from compatible mode to native mode, the following must be
+			 * true:
+			 *
+			 * - The controller must indicate in its programming interface that both channels
+			 *   can be switched to native mode. Windows XP SP1 and Windows Server 2003 do
+			 *   not support switching only one IDE channel to native mode. See the PCI IDE
+			 *   Controller Specification Revision 1.0 for details.
+			 */
+			if ((PrimaryMode != SecondaryMode) || (PrimaryFixed != SecondaryFixed))
+			{
+				/* does not support this configuration, fail */
+				DPRINT1("PciIdeXAddDevice: unsupported IDE controller configuration for VEN_%04x&DEV_%04x!\n",
+				        DeviceExtension->VendorId, DeviceExtension->DeviceId);
+	 			DeviceExtension->BusMasterBase = 0;
+			}
+			else
+			{
+				if ( !(PciConfig.Command & 4) )
+				{
+					PciConfig.Command |= 4; //enable bus master PCI
+
+					//write Command register
+					BytesRead = (*DeviceExtension->BusInterface->SetBusData)(
+							DeviceExtension->BusInterface->Context,
+							PCI_WHICHSPACE_CONFIG,
+							&PciConfig.Command,
+							FIELD_OFFSET(PCI_COMMON_HEADER, Command),
+							sizeof(PciConfig.Command));
+
+					if (BytesRead != sizeof(PciConfig.Command))
+					{
+						DPRINT("PciIdeXAddDevice: BusInterface->SetBusData() failed: BytesRead - %lx\n", BytesRead);
+					}
+				}
+
+				/* Check if the controller is already in native mode */
+				if ((PrimaryMode) && (SecondaryMode))
+				{
+					if ( !PciConfig.u.type0.BaseAddresses[0] ||
+					     !PciConfig.u.type0.BaseAddresses[1] ||
+					     !PciConfig.u.type0.BaseAddresses[2] ||
+					     !PciConfig.u.type0.BaseAddresses[3] )
+					{
+						Fdo->Flags &= ~DO_DEVICE_INITIALIZING;
+						return STATUS_SUCCESS;
+					}
+
+					/* The controller is now in native mode */
+					DeviceExtension->ControllerMode[PRIMARY_CHANNEL]   = 
+				        DeviceExtension->ControllerMode[SECONDARY_CHANNEL] = TRUE; //native BM PCI IDE mode 
+					DPRINT1("PciIdeXAddDevice: controller in NATIVE PCI IDE mode!\n");
+
+					DPRINT("PciIdeXAddDevice: BaseAddresses[5] - %p\n", PciConfig.u.type0.BaseAddresses[5]);
+					if (PciConfig.u.type0.BaseAddresses[5])
+					{
+						if (!(PciConfig.u.type0.BaseAddresses[5] & PCI_ADDRESS_IO_SPACE))
+						{
+							PVOID ResourceBase;
+							PHYSICAL_ADDRESS StartAddress;
+
+							DPRINT(" NOT  (PciConfig.u.type0.BaseAddresses[5] & PCI_ADDRESS_IO_SPACE)\n");
+							StartAddress.LowPart = PciConfig.u.type0.BaseAddresses[5] & PCI_ADDRESS_MEMORY_ADDRESS_MASK;
+							StartAddress.HighPart = 0;
+							ResourceBase = MmMapIoSpace(StartAddress, 4 * sizeof(ULONG), MmNonCached);
+
+							if ( !ResourceBase )
+							{
+								DPRINT1("MmMapIoSpace failed\n");
+								DeviceExtension->SataBaseAddress = 0;
+								Fdo->Flags &= ~DO_DEVICE_INITIALIZING;
+								return STATUS_SUCCESS;
+							}
+
+							DeviceExtension->SataBaseAddress = (ULONG_PTR)ResourceBase;
+							DPRINT("PciIdeXAddDevice: BaseAddresses[5]                 - %p\n", PciConfig.u.type0.BaseAddresses[5]);
+							DPRINT("PciIdeXAddDevice: SATA SuperSet Registers at MemIO - %p\n", DeviceExtension->SataBaseAddress);
+						}
+						else
+						{
+							DPRINT("PciConfig.u.type0.BaseAddresses[5] & PCI_ADDRESS_IO_SPACE\n");
+						}
+					}
+				}
+				else
+				{
+					DPRINT1("PciIdeXAddDevice: FIXME! Enable NATIVE PCI IDE mode!\n");
+				}
+			}
+	 	}
+        }
 
 	Fdo->Flags &= ~DO_DEVICE_INITIALIZING;
 
