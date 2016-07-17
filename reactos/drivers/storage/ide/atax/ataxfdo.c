@@ -41,6 +41,85 @@ AtaXGenericCompletion(
 }
 
 NTSTATUS
+AtaXChannelFdoStartDevice(
+    IN PDEVICE_OBJECT AtaXChannelFdo,
+    IN PIRP Irp)
+{
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  PCM_RESOURCE_LIST       ResourcesTranslated;
+  PDEVICE_OBJECT          LowerDevice;
+  KEVENT                  Event;
+  NTSTATUS                Status;
+
+  DPRINT("AtaXChannelFdoStartDevice: AtaXChannelFdo - %p, Irp - %p)\n", AtaXChannelFdo, Irp);
+
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXChannelFdo->DeviceExtension;
+
+  ASSERT(AtaXChannelFdoExtension);
+  ASSERT(AtaXChannelFdoExtension->CommonExtension.IsFDO);
+
+  LowerDevice = AtaXChannelFdoExtension->CommonExtension.LowerDevice;
+  ASSERT(LowerDevice);
+
+  // Для функции StartDevice в IRP передается указатель на структуру PCM_RESOURCE_LIST с ресурсами
+  // (могут быть RAW и Translated. см. DDK)
+  ResourcesTranslated = IoGetCurrentIrpStackLocation(Irp)->
+                        Parameters.StartDevice.AllocatedResourcesTranslated;
+
+  if ( AtaXChannelFdoExtension->Channel < MAX_IDE_CHANNEL )
+  {
+    DPRINT("AtaXChannelFdoStartDevice: ResourcesTranslated - %p\n", ResourcesTranslated);
+    if ( ResourcesTranslated )
+    {
+      DPRINT("AtaXChannelFdoStartDevice: ResourcesTranslated->Count - %p\n", ResourcesTranslated->Count);
+      if ( ResourcesTranslated->Count == 0 )
+        return STATUS_INVALID_PARAMETER;
+    }
+    else
+    {
+      return STATUS_INVALID_PARAMETER;
+    }
+  }
+
+  // Стартуем нижний объект (pciide и ему подобный)
+  KeInitializeEvent(&Event, SynchronizationEvent, FALSE);
+  IoCopyCurrentIrpStackLocationToNext(Irp);
+  Irp->IoStatus.Status = STATUS_SUCCESS;
+  IoSetCompletionRoutine(Irp, AtaXGenericCompletion, &Event, TRUE, TRUE, TRUE);
+
+  DPRINT("Calling lower device %p [%wZ]\n", LowerDevice, &LowerDevice->DriverObject->DriverName);
+  Status = IoCallDriver(AtaXChannelFdoExtension->CommonExtension.LowerDevice, Irp);
+
+  if ( Status == STATUS_PENDING )
+  {
+    KeWaitForSingleObject(&Event, Executive, KernelMode, FALSE, NULL);
+    Status = Irp->IoStatus.Status;
+  }
+  DPRINT("AtaXChannelFdoStartDevice: IoCallDriver Status - %x\n", Status);
+
+  Status = AtaXQueryBusInterface(AtaXChannelFdo);
+  DPRINT("AtaXChannelFdoStartDevice: AtaXQueryBusInterface return Status - %p\n", Status);
+
+ASSERT(FALSE);
+  Status = 0;//AtaXParseTranslatedResources(AtaXChannelFdoExtension, ResourcesTranslated);
+
+  if ( NT_SUCCESS(Status) && AtaXChannelFdoExtension->InterruptLevel )
+  {
+ASSERT(FALSE);
+  }
+else
+  {
+ASSERT(FALSE);
+  }
+
+  Irp->IoStatus.Information = 0;
+  Irp->IoStatus.Status = Status;
+
+  DPRINT("AtaXChannelFdoStartDevice return - %x \n", Status);
+  return Status;
+}
+
+NTSTATUS
 AtaXChannelFdoDispatchPnp(
     IN PDEVICE_OBJECT AtaXChannelFdo,
     IN PIRP Irp)

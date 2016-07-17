@@ -4,6 +4,8 @@
 #include <ntddk.h>
 #include <stdio.h>
 #include <wdm.h>
+#include <ide.h>
+#include <wdmguid.h>
 
 
 //
@@ -33,6 +35,9 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
 
   ULONG                    Channel;                           // Номер канала
 
+  // Interfaces
+  PBUS_INTERFACE_STANDARD  BusInterface;
+
 } FDO_CHANNEL_EXTENSION, *PFDO_CHANNEL_EXTENSION;
 
 //
@@ -42,6 +47,11 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
 // atax.c
 
 // ataxfdo.c
+NTSTATUS
+AtaXChannelFdoDispatchPnp(
+    IN PDEVICE_OBJECT AtaXChannelFdo,
+    IN PIRP Irp);
+
 NTSTATUS NTAPI
 AddChannelFdo(
     IN PDRIVER_OBJECT DriverObject,
