@@ -450,7 +450,9 @@ PciIdeXPdoPnpDispatch(
 				{
 					case 1: // QueryControllerProperties
 						DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QueryControllerProperties\n");
-						ASSERT(FALSE);
+						*(PVOID *)Stack->Parameters.QueryInterface.Interface = &FdoDeviceExtension->Properties;
+						*(PVOID *)((PULONG)Stack->Parameters.QueryInterface.Interface + 1) = FdoDeviceExtension->MiniControllerExtension;
+                                                DPRINT("PciIdeXPdoPnpDispatch: DeviceObject - %p\n", DeviceObject);
 						Status = STATUS_SUCCESS;
 						break;
 
@@ -463,7 +465,10 @@ PciIdeXPdoPnpDispatch(
 
 					case 5: // QueryBusMasterInterface
 						DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QueryBusMasterInterface\n");
-						ASSERT(FALSE);
+						if (FdoDeviceExtension->BusMasterBase)
+						  Status = QueryBusMasterInterface(DeviceExtension, Stack);
+						else
+						  Status = STATUS_NOT_IMPLEMENTED;
 						break;
 
 					case 7: // QueryAhciInterface

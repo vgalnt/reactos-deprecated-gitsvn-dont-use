@@ -22,12 +22,17 @@ typedef struct _FDO_DEVICE_EXTENSION
 
 	PBUS_INTERFACE_STANDARD BusInterface;
 	IDE_CONTROLLER_PROPERTIES Properties;
+
 	PHYSICAL_ADDRESS BusMasterPortBase;
+	ULONG BusMasterBase;
 	PDEVICE_OBJECT LowerDevice;
 	PDEVICE_OBJECT Pdo[MAX_IDE_CHANNEL];
 	USHORT VendorId;
 	USHORT DeviceId;
+        BOOLEAN ControllerMode[MAX_IDE_CHANNEL]; //TRUE - Native, FALSE - Compatible
+
 	PUCHAR MiniControllerExtension[0];
+
 } FDO_DEVICE_EXTENSION, *PFDO_DEVICE_EXTENSION;
 
 typedef struct _PDO_DEVICE_EXTENSION
