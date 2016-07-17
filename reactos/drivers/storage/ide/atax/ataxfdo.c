@@ -41,6 +41,92 @@ AtaXGenericCompletion(
 }
 
 NTSTATUS
+AtaXQueryBusInterface(IN PDEVICE_OBJECT AtaXChannelFdo)
+{
+  PFDO_CHANNEL_EXTENSION   AtaXChannelFdoExtension;
+  KEVENT                   Event;
+  PIRP                     Irp;
+  IO_STATUS_BLOCK          IoStatus;
+  PIO_STACK_LOCATION       IoStack;
+  NTSTATUS                 Status;
+  PBUS_INTERFACE_STANDARD  BusInterface;
+
+  DPRINT("AtaXQueryBusInterface: \n");
+
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXChannelFdo->DeviceExtension;
+
+  KeInitializeEvent(&Event, NotificationEvent, FALSE);
+
+  Irp = IoBuildSynchronousFsdRequest(
+            IRP_MJ_PNP,
+            AtaXChannelFdoExtension->CommonExtension.LowerDevice,
+            NULL,
+            0,
+            NULL,
+            &Event,
+            &IoStatus);
+
+  if ( Irp == NULL )
+    return STATUS_INSUFFICIENT_RESOURCES;
+
+  Irp->IoStatus.Status = STATUS_NOT_SUPPORTED;
+
+  IoStack = IoGetNextIrpStackLocation(Irp);
+
+  IoStack->MajorFunction = IRP_MJ_PNP;
+  IoStack->MinorFunction = IRP_MN_QUERY_INTERFACE;
+
+  // HACK!!! (правильно использовать поле InterfaceType и GUID_***)
+  // Size - это тип интерфейса (в отличии от InterfaceType)
+  // 1: QueryControllerProperties
+  // 3: QueryPciBusInterface
+  // 5: QueryBusMasterInterface
+  // 7: QueryAhciInterface
+  // 9: QuerySataInterface
+  IoStack->Parameters.QueryInterface.Size = 3; // QueryPciBusInterface
+
+  //любой GUID, должен совпадать с GUID в обрабатывающей функции нижнего PDO (PciIdeXPdoPnpDispatch)
+  IoStack->Parameters.QueryInterface.InterfaceType = (LPGUID)&GUID_BUS_INTERFACE_STANDARD;
+
+  IoStack->Parameters.QueryInterface.Version = 1; //не используется
+  IoStack->Parameters.QueryInterface.Interface = (PINTERFACE)&AtaXChannelFdoExtension->BusInterface;
+  IoStack->Parameters.QueryInterface.InterfaceSpecificData = NULL; //не используется
+
+  Status = IoCallDriver(AtaXChannelFdoExtension->CommonExtension.LowerDevice, Irp);
+
+  if (Status == STATUS_PENDING)
+  {
+    KeWaitForSingleObject(
+          &Event,
+          Executive,
+          KernelMode,
+          FALSE,
+          NULL);
+
+    Status = IoStatus.Status;
+  }
+
+  DPRINT("AtaXQueryBusInterface: IRP_MN_QUERY_INTERFACE Status - %p\n", Status);
+
+  if ( NT_SUCCESS(Status) )
+  {
+    BusInterface = AtaXChannelFdoExtension->BusInterface;
+    DPRINT("AtaXQueryBusInterface: BusInterface    - %p\n", BusInterface);
+  }
+  else
+  {
+    return Status;
+  }
+
+  if ( BusInterface->Size == sizeof(BUS_INTERFACE_STANDARD) )
+    Status = STATUS_SUCCESS;
+  else
+    Status = STATUS_INFO_LENGTH_MISMATCH;
+
+  return Status;
+}
+
+NTSTATUS
 AtaXChannelFdoStartDevice(
     IN PDEVICE_OBJECT AtaXChannelFdo,
     IN PIRP Irp)
