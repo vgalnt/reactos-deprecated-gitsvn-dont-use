@@ -126,6 +126,120 @@ AtaXQueryBusInterface(IN PDEVICE_OBJECT AtaXChannelFdo)
   return Status;
 }
 
+static NTSTATUS NTAPI 
+AtaXParseTranslatedResources(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension, IN PCM_RESOURCE_LIST ResourcesTranslated)
+{
+  ULONG     jx;
+  ULONG     AddressLength = 0;
+  NTSTATUS  Status = STATUS_SUCCESS;
+
+  DPRINT("AtaXParseTranslatedResources: ... \n");
+
+  if ( ResourcesTranslated->Count == 0 )
+  {
+    DPRINT1("ERROR: ResourcesTranslated->Count = 0\n");
+    ASSERT(FALSE);
+    return STATUS_INVALID_PARAMETER;
+  }
+
+  if ( ResourcesTranslated->Count > 1 )
+  {
+    DPRINT1("ERROR: ResourcesTranslated->Count > 1\n");
+    ASSERT(FALSE);
+    return STATUS_INVALID_PARAMETER;
+  }
+
+  // WDM драйвер использует только первый CM_FULL_RESOURCE_DESCRIPTOR
+  for ( jx = 0; jx < ResourcesTranslated->List[0].PartialResourceList.Count; ++jx )  // CM_PARTIAL_RESOURCE_DESCRIPTOR jx
+  {
+    PCM_PARTIAL_RESOURCE_DESCRIPTOR Descriptor;
+    Descriptor = ResourcesTranslated->List[0].PartialResourceList.PartialDescriptors + jx;
+    ASSERT(Descriptor->Type != CmResourceTypeDeviceSpecific);  // ResType_ClassSpecific (0xFFFF)
+
+    switch ( Descriptor->Type )
+    {
+      case CmResourceTypePort:       /* 1 */
+      case CmResourceTypeMemory:     /* 3 */
+      {
+        DPRINT("Descriptor->Type / CmResourceTypePort or CmResourceTypeMemory\n");
+        if ( jx == 0 && Descriptor->u.Port.Length == 8 )
+        {
+           if ( Descriptor->u.Port.Start.HighPart == 0 )
+           {
+              AtaXChannelFdoExtension->BaseIoAddress1.Data        = (PUSHORT)(Descriptor->u.Port.Start.LowPart + 0);
+              AtaXChannelFdoExtension->BaseIoAddress1.Error       = (PUCHAR) (Descriptor->u.Port.Start.LowPart + 1);
+              AtaXChannelFdoExtension->BaseIoAddress1.SectorCount = (PUCHAR) (Descriptor->u.Port.Start.LowPart + 2);
+              AtaXChannelFdoExtension->BaseIoAddress1.LowLBA      = (PUCHAR) (Descriptor->u.Port.Start.LowPart + 3);
+              AtaXChannelFdoExtension->BaseIoAddress1.MidLBA      = (PUCHAR) (Descriptor->u.Port.Start.LowPart + 4);
+              AtaXChannelFdoExtension->BaseIoAddress1.HighLBA     = (PUCHAR) (Descriptor->u.Port.Start.LowPart + 5);
+              AtaXChannelFdoExtension->BaseIoAddress1.DriveSelect = (PUCHAR) (Descriptor->u.Port.Start.LowPart + 6);
+              AtaXChannelFdoExtension->BaseIoAddress1.Command     = (PUCHAR) (Descriptor->u.Port.Start.LowPart + 7);
+           }
+        }
+
+        if ( Descriptor->u.Port.Length == 1 )
+        {
+           if ( Descriptor->u.Port.Start.HighPart == 0 )
+           {
+              if ( AddressLength == 1 )
+                continue; //next PartialDescriptor
+
+              AtaXChannelFdoExtension->BaseIoAddress2.DeviceControl = (PUCHAR)(Descriptor->u.Port.Start.LowPart + 0);
+              //AtaXChannelFdoExtension->BaseIoAddress2.DriveAddress  = (PUCHAR)(Descriptor->u.Port.Start.LowPart + 1);
+
+              AddressLength = 1;
+          }
+        }
+
+        DPRINT("AtaXParseTranslatedResources:  Start.LowPart - %p \n", Descriptor->u.Port.Start.LowPart );
+        DPRINT("AtaXParseTranslatedResources:  Length        - %x \n", Descriptor->u.Port.Length );
+
+        break;
+      }
+
+      case CmResourceTypeInterrupt:  /* 2 */
+      {
+        AtaXChannelFdoExtension->InterruptShareDisposition = Descriptor->ShareDisposition;
+
+        if ( AtaXChannelFdoExtension->SataInterface.Size )
+        {
+          PSATA_INTERRUPT_RESOURCE  InterruptResource = AtaXChannelFdoExtension->SataInterface.InterruptResource;
+
+          AtaXChannelFdoExtension->InterruptShareDisposition = InterruptResource->InterruptShareDisposition;
+          AtaXChannelFdoExtension->InterruptFlags            = InterruptResource->InterruptFlags;
+          AtaXChannelFdoExtension->InterruptLevel            = InterruptResource->InterruptLevel;
+          AtaXChannelFdoExtension->InterruptVector           = InterruptResource->InterruptVector;
+          AtaXChannelFdoExtension->InterruptAffinity         = InterruptResource->InterruptAffinity;
+        }
+        else
+        {
+          AtaXChannelFdoExtension->InterruptShareDisposition = Descriptor->ShareDisposition;
+          AtaXChannelFdoExtension->InterruptFlags            = Descriptor->Flags;
+          AtaXChannelFdoExtension->InterruptLevel            = Descriptor->u.Interrupt.Level;
+          AtaXChannelFdoExtension->InterruptVector           = Descriptor->u.Interrupt.Vector;
+          AtaXChannelFdoExtension->InterruptAffinity         = Descriptor->u.Interrupt.Affinity;
+        }
+
+        DPRINT("Descriptor->Type / CmResourceTypeInterrupt\n");
+        DPRINT("AtaXParseTranslatedResources: Descriptor->ShareDisposition   - %x \n", Descriptor->ShareDisposition );
+        DPRINT("AtaXParseTranslatedResources: Descriptor->Flags              - %x \n", Descriptor->Flags );
+        DPRINT("AtaXParseTranslatedResources: Descriptor->u.Interrupt.Level  - %x \n", Descriptor->u.Interrupt.Level );
+        DPRINT("AtaXParseTranslatedResources: Descriptor->u.Interrupt.Vector - %x \n", Descriptor->u.Interrupt.Vector );
+
+        break;
+      }
+
+      default:
+      {
+        DPRINT1("Descriptor->Type / Unknownn - %x\n", Descriptor->Type);
+        ASSERT(FALSE);
+      }
+    }
+  }
+
+  return Status;
+}
+
 NTSTATUS
 AtaXChannelFdoStartDevice(
     IN PDEVICE_OBJECT AtaXChannelFdo,
@@ -157,7 +271,6 @@ AtaXChannelFdoStartDevice(
     DPRINT("AtaXChannelFdoStartDevice: ResourcesTranslated - %p\n", ResourcesTranslated);
     if ( ResourcesTranslated )
     {
-      DPRINT("AtaXChannelFdoStartDevice: ResourcesTranslated->Count - %p\n", ResourcesTranslated->Count);
       if ( ResourcesTranslated->Count == 0 )
         return STATUS_INVALID_PARAMETER;
     }
@@ -187,7 +300,7 @@ AtaXChannelFdoStartDevice(
   DPRINT("AtaXChannelFdoStartDevice: AtaXQueryBusInterface return Status - %p\n", Status);
 
 ASSERT(FALSE);
-  Status = 0;//AtaXParseTranslatedResources(AtaXChannelFdoExtension, ResourcesTranslated);
+  Status = AtaXParseTranslatedResources(AtaXChannelFdoExtension, ResourcesTranslated);
 
   if ( NT_SUCCESS(Status) && AtaXChannelFdoExtension->InterruptLevel )
   {
@@ -321,6 +434,7 @@ AddChannelFdo(
   NTSTATUS                Status;    
 
   DPRINT("AddChannelFdo ---------------------------------------------------------- \n"  );
+  DPRINT("AddChannelFdo size FDO_CHANNEL_EXTENSION - %p \n", sizeof(FDO_CHANNEL_EXTENSION));
 
   swprintf(DeviceString, L"\\Device\\Ide\\IdePort%d", AtaXChannelCounter);
   RtlInitUnicodeString(&DeviceName, DeviceString);

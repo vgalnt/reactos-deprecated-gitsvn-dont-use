@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <wdm.h>
 #include <ide.h>
+#include <initguid.h>
 #include <wdmguid.h>
 
 
@@ -37,6 +38,16 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
 
   // Interfaces
   PBUS_INTERFACE_STANDARD  BusInterface;
+
+  // IoConnectInterrupt() 
+  PKINTERRUPT              InterruptObject;
+  ULONG                    InterruptLevel;
+  ULONG                    InterruptVector;
+  USHORT                   InterruptFlags;
+  UCHAR                    InterruptShareDisposition;
+  UCHAR                    Padded1;
+  KAFFINITY                InterruptAffinity;
+
 
 } FDO_CHANNEL_EXTENSION, *PFDO_CHANNEL_EXTENSION;
 
