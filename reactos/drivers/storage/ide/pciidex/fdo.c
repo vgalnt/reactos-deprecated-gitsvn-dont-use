@@ -313,14 +313,14 @@ PciIdeXAddDevice(
 							if ( !ResourceBase )
 							{
 								DPRINT1("MmMapIoSpace failed\n");
-								DeviceExtension->SataBaseAddress = 0;
+								//DeviceExtension->SataBaseAddress = 0;
 								Fdo->Flags &= ~DO_DEVICE_INITIALIZING;
 								return STATUS_SUCCESS;
 							}
 
-							DeviceExtension->SataBaseAddress = (ULONG_PTR)ResourceBase;
+							//DeviceExtension->SataBaseAddress = (ULONG_PTR)ResourceBase;
 							DPRINT("PciIdeXAddDevice: BaseAddresses[5]                 - %p\n", PciConfig.u.type0.BaseAddresses[5]);
-							DPRINT("PciIdeXAddDevice: SATA SuperSet Registers at MemIO - %p\n", DeviceExtension->SataBaseAddress);
+							//DPRINT("PciIdeXAddDevice: SATA SuperSet Registers at MemIO - %p\n", DeviceExtension->SataBaseAddress);
 						}
 						else
 						{
