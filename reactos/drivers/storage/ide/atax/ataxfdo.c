@@ -126,6 +126,95 @@ AtaXQueryBusInterface(IN PDEVICE_OBJECT AtaXChannelFdo)
   return Status;
 }
 
+NTSTATUS
+AtaXQueryControllerProperties(
+    IN PDEVICE_OBJECT AtaXChannelFdo)
+{
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  KEVENT                  Event;
+  PIRP                    Irp;
+  IO_STATUS_BLOCK         IoStatus;
+  PIO_STACK_LOCATION      IoStack;
+  NTSTATUS                Status;
+
+  DPRINT("AtaXQueryControllerProperties: ...\n");
+
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXChannelFdo->DeviceExtension;
+
+  KeInitializeEvent(&Event, NotificationEvent, FALSE);
+
+  Irp = IoBuildSynchronousFsdRequest(
+               IRP_MJ_PNP,
+               AtaXChannelFdoExtension->CommonExtension.LowerDevice,
+               NULL,
+               0,
+               NULL,
+               &Event,
+               &IoStatus);
+
+  if ( Irp == NULL )
+    return STATUS_INSUFFICIENT_RESOURCES;
+
+  Irp->IoStatus.Status = STATUS_NOT_SUPPORTED;
+
+  IoStack = IoGetNextIrpStackLocation(Irp);
+  IoStack->MajorFunction = IRP_MJ_PNP;
+  IoStack->MinorFunction = IRP_MN_QUERY_INTERFACE;
+
+  IoStack->Parameters.QueryInterface.Size = 1; //тип интерфейса = ControllerProperties
+  IoStack->Parameters.QueryInterface.InterfaceType = (LPGUID)&GUID_BUS_INTERFACE_STANDARD; //не важно какой GUID, только чтобы совпадал с GUID в обрабатывающей функции
+  IoStack->Parameters.QueryInterface.Version = 1; //не используется
+  IoStack->Parameters.QueryInterface.Interface = (PINTERFACE)&AtaXChannelFdoExtension->HwDeviceExtension.ControllerProperties; // + AtaXChannelFdoExtension->HwDeviceExtension.MiniControllerExtension
+  IoStack->Parameters.QueryInterface.InterfaceSpecificData = NULL; //не используется
+
+  Status = IoCallDriver(AtaXChannelFdoExtension->CommonExtension.LowerDevice, Irp);
+
+  if (Status == STATUS_PENDING)
+  {
+    KeWaitForSingleObject(&Event, Executive, KernelMode, FALSE, NULL);
+    Status = IoStatus.Status;
+  }
+
+  DPRINT("AtaXQueryControllerProperties: IRP_MN_QUERY_INTERFACE Status - %p\n", Status);
+
+  if ( NT_SUCCESS(Status) )
+  {
+    PIDE_CONTROLLER_PROPERTIES  ControllerProperties;
+
+    ControllerProperties = AtaXChannelFdoExtension->HwDeviceExtension.ControllerProperties;
+
+    DPRINT("AtaXQueryControllerProperties: ControllerProperties    - %p\n", ControllerProperties);
+    DPRINT("AtaXQueryControllerProperties: MiniControllerExtension - %p\n", AtaXChannelFdoExtension->HwDeviceExtension.MiniControllerExtension);
+
+    if ( ControllerProperties )
+    {
+      DPRINT("ControllerProperties->SupportedTransferMode[0][0]   - %p\n", ControllerProperties->SupportedTransferMode[0][0]);
+      DPRINT("ControllerProperties->IgnoreActiveBitForAtaDevice   - %p\n", ControllerProperties->IgnoreActiveBitForAtaDevice);
+      DPRINT("ControllerProperties->AlwaysClearBusMasterInterrupt - %p\n", ControllerProperties->AlwaysClearBusMasterInterrupt);
+      DPRINT("ControllerProperties->AlignmentRequirement          - %p\n", ControllerProperties->AlignmentRequirement);
+      DPRINT("ControllerProperties->DefaultPIO                    - %p\n", ControllerProperties->DefaultPIO);
+      DPRINT("ControllerProperties->PciIdeUdmaModesSupported      - %p\n", ControllerProperties->PciIdeUdmaModesSupported);
+    }
+  }
+  else
+  {
+    return Status;
+  }
+
+  DPRINT("AtaXQueryControllerProperties: AtaXChannelFdoExtension->HwDeviceExtension.ControllerProperties->Size - %x\n", AtaXChannelFdoExtension->HwDeviceExtension.ControllerProperties->Size);
+
+  if ( AtaXChannelFdoExtension->HwDeviceExtension.ControllerProperties->Size == sizeof(IDE_CONTROLLER_PROPERTIES) )
+  {
+    Status = STATUS_SUCCESS;
+  }
+  else
+  {
+    Status = STATUS_INFO_LENGTH_MISMATCH;
+  }
+
+  return Status;
+}
+
 NTSTATUS 
 AtaXParseTranslatedResources(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
