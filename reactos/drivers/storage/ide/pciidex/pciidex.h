@@ -4,6 +4,10 @@
 #include <ntifs.h>
 #include <ide.h>
 
+
+#define PRIMARY_CHANNEL		0x00
+#define SECONDARY_CHANNEL	0x01
+
 typedef struct _PCIIDEX_DRIVER_EXTENSION
 {
 	PCONTROLLER_PROPERTIES HwGetControllerProperties;
