@@ -176,7 +176,7 @@ PciIdeXAddDevice(
 }
 
 static NTSTATUS NTAPI
-PciIdeXUdmaModesSupported(
+PciIdeXGetTransferModes(
 	IN IDENTIFY_DATA IdentifyData,
 	OUT PULONG BestXferMode,
 	OUT PULONG CurrentXferMode)
@@ -184,7 +184,7 @@ PciIdeXUdmaModesSupported(
 	ULONG Best = PIO_MODE0;
 	ULONG Current = PIO_MODE0;
 
-	DPRINT("PciIdeXUdmaModesSupported(%lu, %p %p)\n",
+	DPRINT("PciIdeXGetTransferModes(%lu, %p %p)\n",
 		IdentifyData, BestXferMode, CurrentXferMode);
 
 	/* FIXME: if current mode is a PIO mode, how to get it?
@@ -194,16 +194,20 @@ PciIdeXUdmaModesSupported(
 	if (IdentifyData.TranslationFieldsValid & 0x2)
 	{
 		/* PIO modes and some DMA modes are supported */
-		if (IdentifyData.AdvancedPIOModes & 0x10)
+		if (IdentifyData.AdvancedPIOModes & 0x02)
 			Best = PIO_MODE4;
-		else if (IdentifyData.AdvancedPIOModes & 0x8)
+		else if (IdentifyData.AdvancedPIOModes & 0x01)
 			Best = PIO_MODE3;
-		else if (IdentifyData.AdvancedPIOModes & 0x4)
+		else if (IdentifyData.PioCycleTimingMode == 0x02)
 			Best = PIO_MODE2;
-		else if (IdentifyData.AdvancedPIOModes & 0x2)
+		else if (IdentifyData.PioCycleTimingMode == 0x01)
 			Best = PIO_MODE1;
-		else if (IdentifyData.AdvancedPIOModes & 0x1)
+		else if (IdentifyData.PioCycleTimingMode == 0x00)
 			Best = PIO_MODE0;
+		else
+			Best = PIO_MODE0;
+
+		DPRINT("PciIdeXGetTransferModes: PIO Best - %x)\n", Best);
 
 		if (IdentifyData.SingleWordDMASupport & 0x4)
 			Best = SWDMA_MODE2;
@@ -219,6 +223,8 @@ PciIdeXUdmaModesSupported(
 		else if (IdentifyData.SingleWordDMAActive & 0x1)
 			Current = SWDMA_MODE0;
 
+		DPRINT("PciIdeXGetTransferModes: SingleWordDMA Best - %x)\n", Best);
+
 		if (IdentifyData.MultiWordDMASupport & 0x4)
 			Best = MWDMA_MODE2;
 		else if (IdentifyData.MultiWordDMASupport & 0x2)
@@ -232,6 +238,8 @@ PciIdeXUdmaModesSupported(
 			Current = MWDMA_MODE1;
 		else if (IdentifyData.MultiWordDMAActive & 0x1)
 			Current = MWDMA_MODE0;
+
+		DPRINT("PciIdeXGetTransferModes: MultiWordDMA Best - %x)\n", Best);
 	}
 
 	if (IdentifyData.TranslationFieldsValid & 0x4)
@@ -259,6 +267,9 @@ PciIdeXUdmaModesSupported(
 		else if (IdentifyData.UltraDMASupport & 0x1)
 			Best = UDMA_MODE0;
 	}
+
+	DPRINT("PciIdeXGetTransferModes: Best    - %x)\n", Best);
+	DPRINT("PciIdeXGetTransferModes: Current - %x)\n", Best);
 
 	*BestXferMode = Best;
 	*CurrentXferMode = Current;
@@ -294,7 +305,7 @@ PciIdeXFdoStartDevice(
 	DriverExtension->HwUdmaModesSupported = DeviceExtension->Properties.PciIdeUdmaModesSupported;
 	if (!DriverExtension->HwUdmaModesSupported)
 		/* This method is optional, so provide our own one */
-		DriverExtension->HwUdmaModesSupported = PciIdeXUdmaModesSupported;
+		DriverExtension->HwUdmaModesSupported = PciIdeXGetTransferModes;
 
 	/* Get bus master port base, if any */
 	ResourceList = IoGetCurrentIrpStackLocation(Irp)->Parameters.StartDevice.AllocatedResources;
@@ -308,6 +319,8 @@ PciIdeXFdoStartDevice(
 	{
 		DeviceExtension->BusMasterPortBase = ResourceList->List[0].PartialResourceList.PartialDescriptors[0].u.Port.Start;
 	}
+
+	DPRINT("PciIdeXStartDevice return STATUS_SUCCESS\n");
 	return STATUS_SUCCESS;
 }
 
