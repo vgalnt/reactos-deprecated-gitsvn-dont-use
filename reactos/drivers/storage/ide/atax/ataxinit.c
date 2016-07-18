@@ -4,7 +4,7 @@
 #include <debug.h>
 
 
-VOID NTAPI
+VOID
 AtaXGetNextRequest(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
     IN PPDO_DEVICE_EXTENSION  AtaXDevicePdoExtension)
@@ -13,7 +13,6 @@ AtaXGetNextRequest(
   PIRP                  NextIrp;
   PKDEVICE_QUEUE_ENTRY  Entry;
   PSCSI_REQUEST_BLOCK   Srb;
-
 
   //если устройство не активно или очередь полностью заполнена 
   if ( AtaXDevicePdoExtension->QueueCount >= AtaXDevicePdoExtension->MaxQueueCount ||
@@ -624,7 +623,7 @@ AtaXDeviceSetup(
 
     // ?? изменение PioMode не влияет на скорость передачи данных
     // ?? возможно влияет WRITE_PORT_UCHAR(AtaXRegisters1->SectorCount, 0x40 + DmaMode); //0x40...0x47 - UDMA;
-    AtaXChangePioTimings(AtaXChannelFdoExtension, DeviceNumber, PioMode); // изменим тайминги
+    //AtaXChangePioTimings(AtaXChannelFdoExtension, DeviceNumber, PioMode); // изменим тайминги
  
    //FIXME 8.49  SET MULTIPLE MODE      IDE_COMMAND_SET_MULTIPLE (FullIdentifyData.CurrentMultiSectorSetting )
   }

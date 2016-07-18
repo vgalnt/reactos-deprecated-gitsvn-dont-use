@@ -383,8 +383,23 @@ AtaXChannelInterrupt(
     IN PKINTERRUPT Interrupt,
     IN PVOID ServiceContext)
 {
-  ASSERT(FALSE);
-  return 0;
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  BOOLEAN Result;
+
+  DPRINT(" AtaXChannelInterrupt:  Interrupt - %p, ServiceContext - %p \n", Interrupt, ServiceContext );
+
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)((PDEVICE_OBJECT)ServiceContext)->DeviceExtension;
+
+  Result = InterruptRoutine(AtaXChannelFdoExtension);
+
+  DPRINT("AtaXChannelInterrupt: InterruptData.Flags - %x\n", AtaXChannelFdoExtension->InterruptData.Flags);
+  if ( AtaXChannelFdoExtension->InterruptData.Flags & ATAX_NOTIFICATION_NEEDED )  // если ATAX_NOTIFICATION_NEEDED, то запрашиваем DPC
+  {
+    DPRINT1("AtaXChannelInterrupt: KeInsertQueueDpc \n");
+    KeInsertQueueDpc(&AtaXChannelFdoExtension->Dpc, NULL, NULL);
+  }
+
+  return Result;
 }
 
 VOID NTAPI

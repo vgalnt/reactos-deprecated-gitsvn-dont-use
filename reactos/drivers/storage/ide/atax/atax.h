@@ -162,6 +162,25 @@ typedef struct _ATAX_REGISTERS_2 {        //// Адреса блока регистров управления
 
 } ATAX_REGISTERS_2, *PATAX_REGISTERS_2;
 
+typedef struct _SCSI_REQUEST_BLOCK_INFO {
+
+  LIST_ENTRY                        Requests;
+  PSCSI_REQUEST_BLOCK               Srb;
+  PCHAR                             DataOffset;
+  PVOID                             SaveSenseRequest;
+  ULONG                             SequenceNumber;
+
+  struct _SCSI_REQUEST_BLOCK_INFO * CompletedRequests;
+
+} SCSI_REQUEST_BLOCK_INFO, *PSCSI_REQUEST_BLOCK_INFO;
+
+typedef struct _ATAX_INTERRUPT_DATA {
+
+  ULONG                     Flags;                           // Interrupt Флаги
+  PSCSI_REQUEST_BLOCK_INFO  CompletedRequests;               // Список Srb Info 
+
+} ATAX_INTERRUPT_DATA, *PATAX_INTERRUPT_DATA;
+
 typedef struct _HW_DEVICE_EXTENSION {                     //// Аппаратное расширение устройств канала
 
   PCIIDE_TRANSFER_MODE_SELECT  TransferInfo;               // Информация о режимах пересылки данных
@@ -182,19 +201,6 @@ typedef struct _COMMON_ATAX_DEVICE_EXTENSION {
 
 } COMMON_ATAX_DEVICE_EXTENSION, *PCOMMON_ATAX_DEVICE_EXTENSION;
 
-typedef struct _SCSI_REQUEST_BLOCK_INFO {
-
-  LIST_ENTRY                        Requests;
-  PSCSI_REQUEST_BLOCK               Srb;
-  PCHAR                             DataOffset;
-  PVOID                             SaveSenseRequest;
-  ULONG                             SequenceNumber;
-
-  struct _SCSI_REQUEST_BLOCK_INFO * CompletedRequests;
-
-} SCSI_REQUEST_BLOCK_INFO, *PSCSI_REQUEST_BLOCK_INFO;
-
-
 typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение AtaXChannel
 
   COMMON_ATAX_DEVICE_EXTENSION   CommonExtension;          // Общее и для PDO и для FDO расширений
@@ -206,6 +212,7 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
   ATAX_REGISTERS_2         BaseIoAddress2;                    // Список адресов (или портов) для блока регистров управления (используется только первый)
   KDPC                     Dpc;
   KSPIN_LOCK               SpinLock;
+  ATAX_INTERRUPT_DATA      InterruptData;
 
   // Interfaces
   PBUS_INTERFACE_STANDARD  BusInterface;
@@ -281,5 +288,9 @@ NTSTATUS NTAPI
 AddChannelFdo(
     IN PDRIVER_OBJECT DriverObject,
     IN PDEVICE_OBJECT ChannelPdo);
+
+// ataxinit.c
+BOOLEAN
+AtaXDetectDevices(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension);
 
 #endif /* _ATAX_PCH_ */
