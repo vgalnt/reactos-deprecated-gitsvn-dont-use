@@ -3,6 +3,7 @@
 
 #include <ntifs.h>
 #include <ide.h>
+#include <..\bmaster.h>
 
 
 #define PRIMARY_CHANNEL		0x00
@@ -91,5 +92,12 @@ NTSTATUS NTAPI
 PciIdeXPdoPnpDispatch(
 	IN PDEVICE_OBJECT DeviceObject,
 	IN PIRP Irp);
+
+/* dma.c */
+
+NTSTATUS
+QueryBusMasterInterface(
+    IN PPDO_DEVICE_EXTENSION DeviceExtension,
+    IN PIO_STACK_LOCATION Stack);
 
 #endif /* _PCIIDEX_PCH_ */
