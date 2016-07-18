@@ -225,6 +225,7 @@ AtaXQueryBusMasterInterface(IN PDEVICE_OBJECT AtaXChannelFdo)
   IO_STATUS_BLOCK         IoStatus;
   PIO_STACK_LOCATION      Stack;
 
+
   DPRINT("AtaXQueryBusMasterInterface: ... \n");
 
   AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXChannelFdo->DeviceExtension;
@@ -397,6 +398,48 @@ ASSERT(FALSE);
 }
 
 NTSTATUS
+AtaXCreateSymLinks(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension)
+{
+  NTSTATUS        Status = STATUS_SUCCESS;
+  WCHAR           DeviceString[80];
+  WCHAR           SourceString[80];
+  UNICODE_STRING  DeviceName;
+  UNICODE_STRING  SymbolicLinkName;
+  ULONG           ScsiPortCount;
+  ULONG           ix;
+
+  swprintf(DeviceString, L"\\Device\\Ide\\IdePort%d", AtaXChannelFdoExtension->Channel);
+  RtlInitUnicodeString(&DeviceName, DeviceString);
+
+  ScsiPortCount = IoGetConfigurationInformation()->ScsiPortCount;
+  DPRINT("AtaXCreateSymLinks: ScsiPortCount - %x \n", ScsiPortCount);
+
+  for ( ix = 0; ix <= ScsiPortCount; ix++ )
+  {
+    swprintf(SourceString, L"\\Device\\ScsiPort%d", ix);
+    RtlInitUnicodeString(&SymbolicLinkName, SourceString);
+    Status = IoCreateSymbolicLink(&SymbolicLinkName, &DeviceName);
+
+    if ( NT_SUCCESS(Status) )
+    {
+       DPRINT(" AtaXCreateSymLinks: %wZ\n", &SymbolicLinkName);
+
+       swprintf(SourceString, L"\\DosDevices\\Scsi%d:", ix);
+       RtlInitUnicodeString(&SymbolicLinkName, SourceString);
+       IoCreateSymbolicLink(&SymbolicLinkName, &DeviceName);
+
+       DPRINT("AtaXCreateSymLinks: %wZ\n", &SymbolicLinkName);
+       break;
+    }
+  }
+
+  if ( NT_SUCCESS(Status) )
+    ++IoGetConfigurationInformation()->ScsiPortCount;
+
+  return Status;
+}
+
+NTSTATUS
 AtaXChannelFdoStartDevice(
     IN PDEVICE_OBJECT AtaXChannelFdo,
     IN PIRP Irp)
@@ -498,17 +541,16 @@ AtaXChannelFdoStartDevice(
        if ( AtaXChannelFdoExtension->ChannelState == ChannelDisabled )
        {
          Status = AtaXQueryControllerProperties(AtaXChannelFdo);  // запрос конфигурационной информации IDE контроллера
-         DPRINT("AtaXChannelFdoStartDevice: AtaXQueryControllerProperties return Status - %p\n", Status);
+         DPRINT("AtaXChannelFdoStartDevice: AtaXQueryControllerProperties return Status - %x\n", Status);
 
          Status = AtaXQueryBusMasterInterface(AtaXChannelFdo);
-         DPRINT("AtaXChannelFdoStartDevice: AtaXQueryBusMasterInterface return Status - %p\n", Status);
+         DPRINT("AtaXChannelFdoStartDevice: AtaXQueryBusMasterInterface return Status - %x\n", Status);
 
          AtaXChannelFdoExtension->ChannelState = ChannelEnabled;
        }
 
-ASSERT(FALSE);
        // Создаем символические ссылки
-       //Status = AtaXCreateSymLinks(AtaXChannelFdoExtension);
+       Status = AtaXCreateSymLinks(AtaXChannelFdoExtension);
     }
   }
 else
