@@ -440,6 +440,79 @@ AtaXCreateSymLinks(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension)
 }
 
 NTSTATUS
+AtaXChannelFdoQueryDeviceRelations(
+    IN PDEVICE_OBJECT AtaXChannelFdo,
+    IN PIRP Irp)
+{
+  NTSTATUS                Status = STATUS_SUCCESS;
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  PDEVICE_OBJECT          AtaXDevicePdo;
+  UNICODE_STRING          DeviceName;
+  WCHAR                   DeviceString[80];
+  ULONG                   Count = 0;
+  ULONG                   TargetId;
+  ULONG                   ix;
+
+
+  DPRINT("AtaXChannelFdoQueryDeviceRelations (%p %p)\n", AtaXChannelFdo, Irp);
+
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXChannelFdo->DeviceExtension;
+
+  ASSERT(AtaXChannelFdoExtension);
+  ASSERT(AtaXChannelFdoExtension->CommonExtension.IsFDO);
+
+  ix = MAX_IDE_DEVICE;
+
+  // Перечисляем все IDE устройства на канале (Master и Slave)
+  for ( TargetId = 0; TargetId < ix; TargetId++ )
+  {
+    DPRINT("AtaXChannelFdoQueryDeviceRelations: TargetId - %x\n", TargetId);
+
+    // Если PDO уже есть, то пропускаем
+    if ( AtaXChannelFdoExtension->AtaXDevicePdo[TargetId] )
+    {
+      Count++;
+      continue;
+    }
+
+    // Включаем канал 
+    AtaXChannelFdoExtension->ChannelState = ChannelEnabled;
+
+    // Создаем новый PDO (PathId - номер канала (Primari-0 или Secondary-1), TargetId - номер девайса (Master-0 или Slave-1), Lun - 0 (не использ.))
+    swprintf(DeviceString, L"\\Device\\Ide\\IdeDeviceP%dT%dL%d-%x",
+             AtaXChannelFdoExtension->Channel,
+             TargetId,
+             0,
+             InterlockedExchangeAdd((PLONG)&AtaXDeviceCounter, 1));
+
+    RtlInitUnicodeString(&DeviceName, DeviceString);
+    DPRINT("AtaXChannelFdoQueryDeviceRelations: Create AtaXDevicePdo -'%wZ' \n", &DeviceName);
+
+    Status = IoCreateDevice(AtaXChannelFdo->DriverObject,
+                            sizeof(PDO_DEVICE_EXTENSION),
+                            &DeviceName,
+                            FILE_DEVICE_MASS_STORAGE,
+                            FILE_DEVICE_SECURE_OPEN,
+                            FALSE,
+                            &AtaXDevicePdo);
+
+    if ( !NT_SUCCESS(Status) )
+    {
+       // FIXME: handle error
+       DPRINT1("AtaXChannelFdoQueryDeviceRelations: Not created AtaXDevicePdo -'%wZ', Status - %p\n", &DeviceName, Status);
+       continue;
+    }
+
+    DPRINT("AtaXChannelFdoQueryDeviceRelations: sizeof(PDO_DEVICE_EXTENSION) - %x\n", sizeof(PDO_DEVICE_EXTENSION));
+
+ASSERT(FALSE);
+
+  }
+
+  return STATUS_SUCCESS;
+}
+
+NTSTATUS
 AtaXChannelFdoStartDevice(
     IN PDEVICE_OBJECT AtaXChannelFdo,
     IN PIRP Irp)
@@ -597,7 +670,7 @@ AtaXChannelFdoDispatchPnp(
     {
       DPRINT("IRP_MJ_PNP / IRP_MN_REMOVE_DEVICE\n");
 ASSERT(FALSE);
-      Status = 0;//AtaXChannelFdoRemoveDevice(AtaXChannelFdo, Irp);
+      Status = STATUS_SUCCESS;//AtaXChannelFdoRemoveDevice(AtaXChannelFdo, Irp);
       break;
     }
 
@@ -605,7 +678,7 @@ ASSERT(FALSE);
     {
       DPRINT("IRP_MJ_PNP / IRP_MN_STOP_DEVICE\n");
 ASSERT(FALSE);
-      Status = 0;//AtaXChannelFdoStopDevice(AtaXChannelFdo, Irp);
+      Status = STATUS_SUCCESS;//AtaXChannelFdoStopDevice(AtaXChannelFdo, Irp);
       break;
     }
 
@@ -615,8 +688,7 @@ ASSERT(FALSE);
       {
         case BusRelations:
           DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_RELATIONS / BusRelations\n");
-ASSERT(FALSE);
-//          Status = AtaXChannelFdoQueryDeviceRelations(AtaXChannelFdo, Irp);
+          Status = AtaXChannelFdoQueryDeviceRelations(AtaXChannelFdo, Irp);
           break;
         
         default:
@@ -635,8 +707,7 @@ ASSERT(FALSE);
     case IRP_MN_QUERY_PNP_DEVICE_STATE:       /* 0x14 */  //AtaXChannelFdoQueryPnPDeviceState
     {
       DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_PNP_DEVICE_STATE\n");
-ASSERT(FALSE);
-      Status = 0;//AtaXChannelFdoQueryPnPDeviceState(AtaXChannelFdo, Irp);
+      Status = STATUS_SUCCESS;//AtaXChannelFdoQueryPnPDeviceState(AtaXChannelFdo, Irp);
       break;
     }
 
@@ -644,7 +715,7 @@ ASSERT(FALSE);
     {
       DPRINT("IRP_MJ_PNP / IRP_MN_DEVICE_USAGE_NOTIFICATION\n");
 ASSERT(FALSE);
-      Status = 0;//AtaXChannelFdoUsageNotification(AtaXChannelFdo, Irp);
+      Status = STATUS_SUCCESS;//AtaXChannelFdoUsageNotification(AtaXChannelFdo, Irp);
       break;
     }
 
@@ -652,7 +723,7 @@ ASSERT(FALSE);
     {
       DPRINT("IRP_MJ_PNP / IRP_MN_SURPRISE_REMOVAL\n");
 ASSERT(FALSE);
-      Status = 0;//AtaXChannelFdoSurpriseRemoveDevice(AtaXChannelFdo, Irp);
+      Status = STATUS_SUCCESS;//AtaXChannelFdoSurpriseRemoveDevice(AtaXChannelFdo, Irp);
       break;
     }
 
