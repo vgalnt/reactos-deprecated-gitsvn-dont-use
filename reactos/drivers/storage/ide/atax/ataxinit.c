@@ -4,6 +4,97 @@
 #include <debug.h>
 
 
+VOID NTAPI
+AtaXGetNextRequest(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PPDO_DEVICE_EXTENSION  AtaXDevicePdoExtension)
+{
+  PIO_STACK_LOCATION    IrpStack;
+  PIRP                  NextIrp;
+  PKDEVICE_QUEUE_ENTRY  Entry;
+  PSCSI_REQUEST_BLOCK   Srb;
+
+
+  //если устройство не активно или очередь полностью заполнена 
+  if ( AtaXDevicePdoExtension->QueueCount >= AtaXDevicePdoExtension->MaxQueueCount ||
+      !(AtaXDevicePdoExtension->Flags & ATAX_LU_ACTIVE) )
+  {
+    KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+    return;
+  }
+
+  DPRINT("AtaXGetNextRequest: AtaXDevicePdoExtension->Flags - %x\n", AtaXDevicePdoExtension->Flags);
+
+  if ( AtaXDevicePdoExtension->Flags &
+      (LUNEX_NEED_REQUEST_SENSE | LUNEX_BUSY |
+       LUNEX_FULL_QUEUE | LUNEX_FROZEN_QUEUE | LUNEX_REQUEST_PENDING) )
+  {
+    if ( IsListEmpty(&AtaXDevicePdoExtension->SrbInfo.Requests) &&
+         !(AtaXDevicePdoExtension->Flags &
+          (LUNEX_BUSY | LUNEX_FROZEN_QUEUE | LUNEX_FULL_QUEUE | LUNEX_NEED_REQUEST_SENSE)) )
+    {
+      ASSERT(AtaXDevicePdoExtension->SrbInfo.Srb == NULL);
+
+      AtaXDevicePdoExtension->Flags &= ~(LUNEX_REQUEST_PENDING | ATAX_LU_ACTIVE);
+
+      DPRINT("AtaXGetNextRequest: AtaXDevicePdoExtension->PendingRequest - %x\n", AtaXDevicePdoExtension->PendingRequest);
+      NextIrp = AtaXDevicePdoExtension->PendingRequest;
+
+      AtaXDevicePdoExtension->PendingRequest = NULL;
+      AtaXDevicePdoExtension->AttemptCount = 0;
+
+      KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+
+      IoStartPacket(
+             AtaXChannelFdoExtension->CommonExtension.SelfDevice,
+             NextIrp,
+             NULL,
+             NULL);
+
+      return;
+    }
+    else
+    {
+      KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+      return;
+    }
+  }
+
+  AtaXDevicePdoExtension->Flags &= ~ATAX_LU_ACTIVE;
+  AtaXDevicePdoExtension->AttemptCount = 0;
+
+  // удаляем пакет из очереди устройства
+  Entry = KeRemoveByKeyDeviceQueue(
+                  &AtaXDevicePdoExtension->DeviceQueue,
+                  AtaXDevicePdoExtension->SortKey);
+
+  DPRINT("AtaXGetNextRequest: Entry - %x\n", Entry);
+
+  if ( Entry != NULL )
+  {
+    // получаем указатель на следующий IRP
+    NextIrp = CONTAINING_RECORD(Entry, IRP, Tail.Overlay.DeviceQueueEntry);
+
+    IrpStack = IoGetCurrentIrpStackLocation(NextIrp);
+    Srb = (PSCSI_REQUEST_BLOCK)IrpStack->Parameters.Others.Argument1;
+
+    AtaXDevicePdoExtension->SortKey = Srb->QueueSortKey;
+    AtaXDevicePdoExtension->SortKey++;  // новый индекс
+
+    KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+
+      IoStartPacket(
+             AtaXChannelFdoExtension->CommonExtension.SelfDevice,
+             NextIrp,
+             NULL,
+             NULL);
+  }
+  else
+  {
+    KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+  }
+}
+
 NTSTATUS
 AtaXSendInquiry(
     PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,

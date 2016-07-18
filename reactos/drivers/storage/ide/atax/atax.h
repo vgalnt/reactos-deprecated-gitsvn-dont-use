@@ -241,6 +241,8 @@ typedef struct _PDO_DEVICE_EXTENSION {                    //// PDO расширение At
   UCHAR                    PathId;                         // Номер канала (Primari или Secondary)
   UCHAR                    TargetId;                       // Номер девайса (Master или Slave)
   UCHAR                    Lun;                            // Не используется в AtaX (0)
+  ULONG                    AttemptCount;
+  PIRP                     PendingRequest;
 
   // Очередь IRPs для устройства
   KDEVICE_QUEUE            DeviceQueue;                    // Структура для поддержки очереди из IRPs
