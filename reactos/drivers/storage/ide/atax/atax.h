@@ -217,6 +217,7 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
   IDE_CHANNEL_STATE        ChannelState;                      // Состояние канала
   ATAX_REGISTERS_1         BaseIoAddress1;                    // Список адресов (или портов) для блока командных регистров
   ATAX_REGISTERS_2         BaseIoAddress2;                    // Список адресов (или портов) для блока регистров управления (используется только первый)
+  ULONG                    SequenceNumber;                    // глобальный счётчик для пакетов
   KDPC                     Dpc;
   KSPIN_LOCK               SpinLock;
   ATAX_INTERRUPT_DATA      InterruptData;
@@ -235,6 +236,8 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
   KAFFINITY                InterruptAffinity;
 
   PSCSI_REQUEST_BLOCK      CurrentSrb;                        // Текущий SCSI_REQUEST_BLOCK
+  ULONG                    SrbFlags;
+
   BOOLEAN                  ExpectingInterrupt;                // Ожидаемое прерывание
   BOOLEAN                  RDP;                               // Indicate last tape command was DSC Restrictive.
   BOOLEAN                  DWordIO;                           // 32-bit PIO

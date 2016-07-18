@@ -279,13 +279,146 @@ AtaXNotification(
   AtaXChannelFdoExtension->InterruptData.Flags |= ATAX_NOTIFICATION_NEEDED;
 }
 
+BOOLEAN
+AtaXStartPacket(IN PVOID Context)
+{
+ASSERT(FALSE);
+  return 0;
+}
+
+NTSTATUS
+SynchronizeStartPacket(PDEVICE_OBJECT AtaXChannelFdo)
+{
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  KIRQL                   OldIrql;
+
+  DPRINT("SynchronizeStartPacket: ... \n");
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXChannelFdo->DeviceExtension;
+
+  KeAcquireSpinLock(&AtaXChannelFdoExtension->SpinLock, &OldIrql);
+
+  KeSynchronizeExecution(AtaXChannelFdoExtension->InterruptObject,
+                              (PKSYNCHRONIZE_ROUTINE)AtaXStartPacket,
+                              AtaXChannelFdo);
+
+  KeReleaseSpinLock(&AtaXChannelFdoExtension->SpinLock, OldIrql);
+
+  DPRINT(" SynchronizeStartPacket: return - STATUS_SUCCESS\n");
+  return STATUS_SUCCESS;
+}
+
 VOID NTAPI
 AtaXStartIo(
     IN PDEVICE_OBJECT AtaXChannelFdo,
     IN PIRP Irp)
 {
+  PFDO_CHANNEL_EXTENSION    AtaXChannelFdoExtension;
+  PPDO_DEVICE_EXTENSION     AtaXDevicePdoExtension;
+  PIO_STACK_LOCATION        IoStack;
+  PSCSI_REQUEST_BLOCK       Srb;
+  PSCSI_REQUEST_BLOCK_INFO  SrbInfo;
+//  NTSTATUS                  Status;
+
   DPRINT("AtaXStartIo ... \n");
-  ASSERT(FALSE);
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXChannelFdo->DeviceExtension;
+  ASSERT(AtaXChannelFdoExtension);
+  ASSERT(AtaXChannelFdoExtension->CommonExtension.IsFDO);
+
+  IoStack = IoGetCurrentIrpStackLocation((PIRP)Irp);
+  Srb = (PSCSI_REQUEST_BLOCK)IoStack->Parameters.Scsi.Srb;
+
+  AtaXDevicePdoExtension = (AtaXChannelFdoExtension->AtaXDevicePdo[Srb->TargetId])->DeviceExtension;
+
+  Srb->SrbFlags |= AtaXChannelFdoExtension->SrbFlags;  // "default" flags
+
+  SrbInfo = &AtaXDevicePdoExtension->SrbInfo;
+  Srb->SrbExtension = NULL;
+  Srb->QueueTag = SP_UNTAGGED;
+
+  if ( !SrbInfo->SequenceNumber )
+  {
+    AtaXChannelFdoExtension->SequenceNumber++;
+    SrbInfo->SequenceNumber = AtaXChannelFdoExtension->SequenceNumber;
+  }
+
+  if ( Srb->Function == SRB_FUNCTION_ABORT_COMMAND )
+  {
+    DPRINT1("Abort command! Unimplemented now\n");
+ASSERT(FALSE);
+  }
+  else
+  {
+    SrbInfo->Srb = Srb;
+  } 
+
+  if ( Srb->SrbFlags & (SRB_FLAGS_DATA_IN | SRB_FLAGS_DATA_OUT) )
+  {
+    DPRINT(" AtaXStartIo: Srb->SrbFlags & (SRB_FLAGS_DATA_IN | SRB_FLAGS_DATA_OUT) == TRUE \n");
+
+    if ( Irp->MdlAddress != NULL )
+    {
+      DPRINT(" AtaXStartIo: Irp->MdlAddress - %p\n", Irp->MdlAddress);
+      SrbInfo->DataOffset = MmGetMdlVirtualAddress(Irp->MdlAddress);
+    }
+
+    DPRINT(" AtaXStartIo: Srb->SrbFlags - %x\n", Srb->SrbFlags);
+
+    if ( Srb->SrbFlags & SRB_FLAGS_USE_DMA )
+    {
+      PBUS_MASTER_INTERFACE BusMasterInterface;
+
+      BusMasterInterface = &AtaXChannelFdoExtension->BusMasterInterface;
+  
+      if ( BusMasterInterface->BusMasterPrepare )
+      {
+ ASSERT(FALSE);
+/*       Status = BusMasterInterface->BusMasterPrepare(
+                          BusMasterInterface->ChannelPdoExtension,
+                          Srb->DataBuffer,
+                          Srb->DataTransferLength,
+                          Irp->MdlAddress,
+                          (Srb->SrbFlags & SRB_FLAGS_DATA_OUT) == SRB_FLAGS_DATA_OUT,
+                          SynchronizeStartPacket,
+                          AtaXChannelFdo);
+        DPRINT(" AtaXStartIo: BusMasterPrepare return - %x\n", Status);
+
+        if ( NT_SUCCESS(Status) )
+          return;
+  
+        DPRINT("AtaXStartIo: BusMasterPrepare fail. Status - %x. Enable PIO mode.\n", Status);
+        Srb->SrbFlags &= ~SRB_FLAGS_USE_DMA;  // PIO mode
+*/
+      }
+    }
+  }
+  else
+  {
+    DPRINT(" AtaXStartIo: Srb->SrbFlags & (SRB_FLAGS_DATA_IN | SRB_FLAGS_DATA_OUT) == FALSE  \n");
+    ASSERT(FALSE);
+  }
+
+  Srb->SrbFlags &= ~SRB_FLAGS_USE_DMA; // use PIO
+  DPRINT(" AtaXStartIo: Srb->SrbFlags - %x\n", Srb->SrbFlags);
+
+  if ( SynchronizeStartPacket(AtaXChannelFdo) < 0 )
+  {
+    DPRINT("AtaXStartIo: SynchronizeStartPacket() failed!\n");
+    Irp->IoStatus.Status = STATUS_UNSUCCESSFUL;
+    Irp->IoStatus.Information = 0;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+  }
+
+  // HACK!!!
+  if ( (ULONG)Srb->DataBuffer < 0x80000000 )
+  {
+    do  
+    {
+      KeStallExecutionProcessor(1);
+      DPRINT("AtaXStartIo: Srb->DataBuffer - %p, KeStallExecutionProcessor(1)\n", Srb->DataBuffer);
+    } while ( AtaXChannelFdoExtension->ExpectingInterrupt == TRUE );
+  }
+
+  DPRINT("AtaXStartIo: exit\n");
 }
 
 DRIVER_DISPATCH AtaXDispatchDeviceControl;
