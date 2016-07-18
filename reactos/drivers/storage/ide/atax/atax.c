@@ -74,6 +74,34 @@ AtaXSoftReset(
   KeStallExecutionProcessor(500);
 }
 
+ULONG NTAPI 
+AtaXMapError(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PSCSI_REQUEST_BLOCK Srb)
+{
+  PATAX_REGISTERS_1  AtaXRegisters1 = &AtaXChannelFdoExtension->BaseIoAddress1;
+  UCHAR              ErrorByte;
+  UCHAR              SrbStatus = SRB_STATUS_ERROR;
+  UCHAR              ScsiStatus=0;
+
+  DPRINT("AtaXMapError: AtaXChannelFdoExtension - %p, Srb - %p\n", AtaXChannelFdoExtension, Srb);
+
+  ErrorByte = READ_PORT_UCHAR(AtaXRegisters1->Error);  // Read the error register.
+  DPRINT("AtaXMapError: Error register is %x\n", ErrorByte);
+
+  if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )
+  {
+ASSERT(FALSE);
+  }
+  else
+  {
+ASSERT(FALSE);
+  }
+
+  Srb->ScsiStatus = ScsiStatus;  // Set SCSI status to indicate a check condition.
+  return SrbStatus;
+}
+
 VOID NTAPI
 AtaXStartIo(
     IN PDEVICE_OBJECT AtaXChannelFdo,

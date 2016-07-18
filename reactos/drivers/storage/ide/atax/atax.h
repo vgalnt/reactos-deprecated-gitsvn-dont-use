@@ -288,6 +288,11 @@ AtaXSoftReset(
     IN PATAX_REGISTERS_2 AtaXRegisters2,
     IN ULONG DeviceNumber);
 
+ULONG NTAPI 
+AtaXMapError(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PSCSI_REQUEST_BLOCK Srb);
+
 // ataxfdo.c
 NTSTATUS
 AtaXChannelFdoDispatchPnp(
