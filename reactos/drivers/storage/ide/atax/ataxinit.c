@@ -20,7 +20,6 @@ AtaXIssueIdentify(
   UCHAR              SignatureDeviceNumber;
   ULONG              WaitCount = 20000;
   ULONG              ix, jx;
-  BOOLEAN            SataMode;
 
   DPRINT("AtaXIssueIdentify: AtaXChannelFdoExtension - %p, DeviceNumber - %x, Command - %x\n", AtaXChannelFdoExtension, DeviceNumber, Command);
 

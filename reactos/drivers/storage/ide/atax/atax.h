@@ -220,6 +220,9 @@ typedef struct _PDO_DEVICE_EXTENSION {                    //// PDO расширение At
 VOID 
 AtaXWaitOnBusy(IN PATAX_REGISTERS_2 AtaXRegisters2);
 
+VOID
+AtaXWaitForDrq(IN PATAX_REGISTERS_2 AtaXRegisters2);
+
 VOID 
 AtaXSoftReset(
     IN PATAX_REGISTERS_1 AtaXRegisters1,
