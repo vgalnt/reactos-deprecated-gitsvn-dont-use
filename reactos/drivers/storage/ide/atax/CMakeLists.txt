@@ -1,6 +1,7 @@
 
 list(APPEND SOURCE
     atax.c
+    ataxinit.c
     ataxfdo.c
     atax.h)
 
