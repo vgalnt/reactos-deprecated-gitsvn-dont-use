@@ -7,7 +7,29 @@
 ULONG AtaXChannelCounter  = 0;
 
 
-VOID NTAPI 
+VOID 
+AtaXWaitOnBusy(IN PATAX_REGISTERS_2 AtaXRegisters2)
+{
+  ULONG ix;
+  UCHAR Status;
+
+  for ( ix = 0; ix < 20000; ix++ )
+  {
+    Status = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+
+    if ( Status & IDE_STATUS_BUSY )
+    {
+      KeStallExecutionProcessor(50);
+      continue;
+    }
+    else
+    {
+      break;
+    }
+  }
+}
+
+VOID 
 AtaXSoftReset(
     IN PATAX_REGISTERS_1 AtaXRegisters1,
     IN PATAX_REGISTERS_2 AtaXRegisters2,
