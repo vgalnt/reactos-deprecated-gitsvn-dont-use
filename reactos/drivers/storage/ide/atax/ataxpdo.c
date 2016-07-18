@@ -4,6 +4,30 @@
 #include <debug.h>
 
 
+BOOLEAN
+AtaXQueueAddIrp(
+    IN PPDO_DEVICE_EXTENSION AtaXDevicePdoExtension,
+    IN PIRP Irp,
+    IN ULONG SortKey)
+{
+  BOOLEAN  Result = FALSE;
+  KIRQL    OldIrql;
+
+  DPRINT("AtaXQueueAddIrp: AtaXDevicePdoExtension - %p, Irp - %p, SortKey - %x\n", AtaXDevicePdoExtension, Irp, SortKey);
+
+  KeRaiseIrql(DISPATCH_LEVEL, &OldIrql);
+
+  Result = KeInsertByKeyDeviceQueue(
+               &AtaXDevicePdoExtension->DeviceQueue,
+               &Irp->Tail.Overlay.DeviceQueueEntry,
+               SortKey);
+
+  KeLowerIrql(OldIrql);
+
+  DPRINT("AtaXQueueAddIrp return - %x \n", Result);
+  return Result;
+}
+
 NTSTATUS
 AtaXDevicePdoDispatchScsi(
     IN PDEVICE_OBJECT AtaXDevicePdo,
