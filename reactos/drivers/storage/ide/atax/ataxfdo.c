@@ -379,6 +379,349 @@ ASSERT(FALSE);
 }
 
 BOOLEAN 
+InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
+{
+  PSCSI_REQUEST_BLOCK    Srb;
+  PATAX_REGISTERS_1      AtaXRegisters1;
+  PATAX_REGISTERS_2      AtaXRegisters2;
+  UCHAR                  StatusByte;
+  UCHAR                  InterruptReason;
+  BOOLEAN                Result      = FALSE;
+  BOOLEAN                AtapiDevice = FALSE;
+  BOOLEAN                BusMaster   = FALSE;
+  ULONG                  WordCount = 0;
+  ULONG                  WordsThisInterrupt = 256;
+  ULONG                  Status;
+  ULONG                  BusMasterStatus;
+  ULONG                  ix;
+  PBUS_MASTER_INTERFACE  BusMasterInterface;
+
+  DPRINT(" InterruptRoutine:  AtaXChannelFdoExtension - %p \n", AtaXChannelFdoExtension );
+
+  BusMasterInterface = &AtaXChannelFdoExtension->BusMasterInterface;
+  AtaXRegisters1     = &AtaXChannelFdoExtension->BaseIoAddress1;
+  AtaXRegisters2     = &AtaXChannelFdoExtension->BaseIoAddress2;
+  Srb                = AtaXChannelFdoExtension->CurrentSrb;
+
+  if ( AtaXChannelFdoExtension->BusMaster )
+  {
+    BusMasterStatus = BusMasterInterface->BusMasterReadStatus(
+                                BusMasterInterface->ChannelPdoExtension);
+
+    DPRINT(" InterruptRoutine:  BusMasterReadStatus - %x \n",  BusMasterStatus);
+    // Interrupt bit. When this bit is read as a one,
+    // all data transfered from the drive is visible in system memory
+    if ( BusMasterStatus & 4 )
+    {
+      BusMasterInterface->BusMasterStop(BusMasterInterface->ChannelPdoExtension);
+      Result = TRUE;
+    }
+  }
+
+  if ( !Srb )
+  {
+    DPRINT("InterruptRoutine: CurrentSrb is NULL\n");
+    // считываем регистр состояния и сбрасываем прерывание
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+    return Result;
+  }
+
+  if ( AtaXChannelFdoExtension->ExpectingInterrupt == FALSE )
+  {
+    DPRINT("InterruptRoutine: Unexpected interrupt\n");
+    return Result;
+  }
+
+  if ( !(AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_USE_DMA) )
+  {
+    BusMasterStatus = BusMasterInterface->BusMasterReadStatus(
+                               BusMasterInterface->ChannelPdoExtension);
+
+    DPRINT(" InterruptRoutine:  BusMasterReadStatus - %x \n",  BusMasterStatus);
+    // Interrupt bit. When this bit is read as a one,
+    // all data transfered from the drive is visible in system memory
+    if ( BusMasterStatus & 4 )
+    {
+      BusMasterInterface->BusMasterStop(BusMasterInterface->ChannelPdoExtension);
+    }
+  }
+
+  if ( AtaXChannelFdoExtension->BusMaster )
+  {
+    BusMaster = TRUE;
+    AtaXChannelFdoExtension->BusMaster = FALSE; //reset BusMaster
+  }
+
+  // считываем регистр состояния и сбрасываем прерывание
+  StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+  DPRINT1("InterruptRoutine: Entered with Status - %x\n", StatusByte);
+
+  if ( StatusByte & IDE_STATUS_BUSY )
+  {
+    DPRINT("InterruptRoutine: StatusByte & IDE_STATUS_BUSY \n");
+
+    for ( ix = 0; ix < 10; ix++ )
+    {
+      // считываем регистр состояния и сбрасываем прерывание
+      StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+      if ( !(StatusByte & IDE_STATUS_BUSY) )
+        break;
+      KeStallExecutionProcessor(5000);
+    }
+
+    if ( ix == 10 )
+    {
+      DPRINT("InterruptRoutine: StatusByte & IDE_STATUS_BUSY. Status %x, Base IO %x\n", StatusByte, AtaXRegisters1);
+      return TRUE;
+    }
+  }
+
+  if ( StatusByte & IDE_STATUS_ERROR ) // если есть ошибка
+  {
+    DPRINT1("InterruptRoutine: StatusByte & IDE_STATUS_ERROR\n");
+    if ( Srb->Cdb[0] != SCSIOP_REQUEST_SENSE )
+    {
+      // этот запрос сбойный
+      Status = SRB_STATUS_ERROR;
+      goto CompleteRequest;
+    }
+  }
+
+  // причина прерывания
+  if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )
+  {
+    // ATAPI устройство
+    InterruptReason = (READ_PORT_UCHAR(AtaXRegisters1->InterruptReason) & 3);
+    AtapiDevice = TRUE;
+    WordsThisInterrupt = 256;
+  }
+  else
+  {
+    // ATA устройство
+    if ( BusMaster )
+    {
+       goto CompleteRequest;
+    }
+
+    if ( StatusByte & IDE_STATUS_DRQ )
+    {
+      if ( AtaXChannelFdoExtension->MaximumBlockXfer[Srb->TargetId] )
+        WordsThisInterrupt = 256 * AtaXChannelFdoExtension->MaximumBlockXfer[Srb->TargetId];
+
+      if ( Srb->SrbFlags & SRB_FLAGS_DATA_IN )
+      {
+        InterruptReason =  2;
+      }
+      else if ( Srb->SrbFlags & SRB_FLAGS_DATA_OUT )
+      {
+        InterruptReason = 0;
+      }
+      else
+      {
+        Status = SRB_STATUS_ERROR;
+        goto CompleteRequest;
+      }
+    }
+    else if ( StatusByte & IDE_STATUS_BUSY )
+    {
+      return FALSE;
+    }
+    else
+    {
+      if ( AtaXChannelFdoExtension->WordsLeft )
+      {
+        InterruptReason = (Srb->SrbFlags & SRB_FLAGS_DATA_IN) ?  2 : 0;
+      }
+      else
+      {
+        // команда выполнена - verify, write, or the SMART enable/disable, also get_media_status
+        InterruptReason = 3;
+      }
+    }
+  }
+
+  DPRINT1("InterruptRoutine: InterruptReason - %x\n", InterruptReason);
+
+  if ( InterruptReason == 1 && (StatusByte & IDE_STATUS_DRQ) )
+  {
+    // запись Atapi пакета
+    DPRINT("InterruptRoutine: Writing Atapi packet.\n");
+
+    // отправляем CDB устройству
+    WRITE_PORT_BUFFER_USHORT(AtaXRegisters1->Data, (PUSHORT)Srb->Cdb, 6);
+    return TRUE;
+  }
+  else if ( InterruptReason == 0 && (StatusByte & IDE_STATUS_DRQ) )
+  {
+    // запись данных
+ASSERT(FALSE);
+    return TRUE;
+  }
+  else if ( InterruptReason == 2 && (StatusByte & IDE_STATUS_DRQ) )
+  {
+    // чтение данных
+ASSERT(FALSE);
+    return TRUE;
+  }
+  else if ( InterruptReason == 3  && !(StatusByte & IDE_STATUS_DRQ) )
+  {
+    // команда завершена
+    if ( !BusMaster )
+    {
+      if ( AtaXChannelFdoExtension->WordsLeft )
+        Status = SRB_STATUS_DATA_OVERRUN;
+      else
+        Status = SRB_STATUS_SUCCESS;
+    }
+
+CompleteRequest:
+    //DPRINT("InterruptRoutine: CompleteRequest\n");
+
+    if ( BusMaster )
+    {
+ASSERT(FALSE);
+       DPRINT("InterruptRoutine: Status - %x\n", Status);
+    }
+
+    if ( Status == SRB_STATUS_ERROR )  // ошибка
+    {
+      // map error to specific SRB Status and handle request sense
+      DPRINT("InterruptRoutine: Status == SRB_STATUS_ERROR\n");
+      Status = AtaXMapError(AtaXChannelFdoExtension, Srb);      //Status = 6;
+      AtaXChannelFdoExtension->RDP = FALSE;
+    }
+    else
+    {
+      // подождем если занято
+      for ( ix = 0; ix < 30; ix++ )
+      {
+        StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);  // Считываем альтернативный регистр состояния
+        DPRINT("AtaXIssueIdentify: Status (AlternateStatus) before read words - %x\n", StatusByte);
+
+        if ( !(StatusByte & IDE_STATUS_BUSY) )
+          break;
+        KeStallExecutionProcessor(500);
+      }
+
+      if ( ix == 30 )
+      {
+        // занято. сброс контроллера
+         DPRINT("InterruptRoutine: Resetting due to BSY still up - %x. Base Io %x\n", StatusByte, AtaXRegisters1);
+         DPRINT("InterruptRoutine: FIXME AtapiResetController()\n");
+         //AtapiResetController(HwDeviceExtension,Srb->PathId);
+         return TRUE;
+      }
+
+      // подождем если DRQ
+      if ( StatusByte & IDE_STATUS_DRQ )
+      {
+        for ( ix = 0; ix < 500; ix++ )
+        {
+          StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);  // Считываем альтернативный регистр состояния
+          DPRINT("AtaXIssueIdentify: Status (AlternateStatus) before read words - %x\n", StatusByte);
+
+          if ( !(StatusByte & IDE_STATUS_DRQ) )
+            break;
+          KeStallExecutionProcessor(100);
+        }
+
+        if ( ix == 500 )
+        {
+          // сброс контроллера
+          DPRINT("InterruptRoutine: Resetting due to DRQ still up - %x\n", StatusByte);
+          DPRINT("InterruptRoutine: FIXME AtapiResetController()\n");
+          //AtapiResetController(HwDeviceExtension,Srb->PathId);
+          return TRUE;
+        }
+      }
+    }
+
+    AtaXChannelFdoExtension->ExpectingInterrupt = FALSE;
+
+    if ( Srb != NULL )
+    {
+      Srb->SrbStatus = (UCHAR)Status;
+      if ( AtaXChannelFdoExtension->WordsLeft )
+      {
+        if ( !(AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_TAPE_DEVICE) )
+        {
+          if ( Status == SRB_STATUS_DATA_OVERRUN )
+            Srb->DataTransferLength -= AtaXChannelFdoExtension->WordsLeft;
+          else
+            Srb->DataTransferLength = 0;
+        }
+        else
+        {
+          Srb->DataTransferLength -= AtaXChannelFdoExtension->WordsLeft;
+        }
+      }
+
+      if ( Srb->Function != SRB_FUNCTION_IO_CONTROL )
+      {
+        // команда завершена?
+        if ( !(AtaXChannelFdoExtension->RDP) )
+          AtaXNotification(RequestComplete, AtaXChannelFdoExtension, Srb);
+      }
+      else
+      {
+        PSENDCMDOUTPARAMS  cmdOutParameters;
+        UCHAR  error = 0;
+
+        cmdOutParameters = (PSENDCMDOUTPARAMS)(((PUCHAR)Srb->DataBuffer) + sizeof(SRB_IO_CONTROL));
+        if ( Status != SRB_STATUS_SUCCESS )
+          error = READ_PORT_UCHAR(AtaXRegisters1->Error);
+
+        // построение SMART Status block
+        cmdOutParameters->cBufferSize = WordCount;
+        cmdOutParameters->DriverStatus.bDriverError = (error) ? SMART_IDE_ERROR : 0;
+        cmdOutParameters->DriverStatus.bIDEError = error;
+
+        if ( AtaXChannelFdoExtension->SmartCommand == RETURN_SMART_STATUS )
+        {
+          cmdOutParameters->bBuffer[0] = RETURN_SMART_STATUS;
+          cmdOutParameters->bBuffer[1] = READ_PORT_UCHAR(AtaXRegisters1->InterruptReason);
+          cmdOutParameters->bBuffer[2] = READ_PORT_UCHAR(AtaXRegisters1->LowLBA);//Unused1
+          cmdOutParameters->bBuffer[3] = READ_PORT_UCHAR(AtaXRegisters1->ByteCountLow);
+          cmdOutParameters->bBuffer[4] = READ_PORT_UCHAR(AtaXRegisters1->ByteCountHigh);
+          cmdOutParameters->bBuffer[5] = READ_PORT_UCHAR(AtaXRegisters1->DriveSelect);
+          cmdOutParameters->bBuffer[6] = SMART_CMD;
+          cmdOutParameters->cBufferSize = 8;
+        }
+
+        AtaXNotification(RequestComplete, AtaXChannelFdoExtension, Srb);  // команда завершена
+      }
+    }
+    else
+    {
+      DPRINT("InterruptRoutine: No SRB!\n");
+    }
+
+    if ( !(AtaXChannelFdoExtension->RDP) )  // готовность к следующему запросу
+    {
+      AtaXChannelFdoExtension->CurrentSrb = NULL;
+      AtaXNotification(NextRequest, AtaXChannelFdoExtension, NULL);
+    }
+    else
+    {
+      DPRINT("InterruptRoutine: AtaXNotification FIXME\n");
+      //AtaXNotification(RequestTimerCall, AtaXChannelFdoExtension, AtapiCallBack, 2000);
+    }
+
+    DPRINT("InterruptRoutine: return TRUE\n");
+    return TRUE;
+  }
+  else
+  {
+    // неожидаемое прерывание
+    DPRINT("InterruptRoutine: Unexpected interrupt. InterruptReason %x. Status %x.\n", InterruptReason, StatusByte);
+    return FALSE;
+  }
+
+  DPRINT("InterruptRoutine: return TRUE\n");
+  return TRUE;
+}
+
+BOOLEAN 
 AtaXChannelInterrupt(
     IN PKINTERRUPT Interrupt,
     IN PVOID ServiceContext)

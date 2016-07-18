@@ -7,6 +7,8 @@
 #include <ide.h>
 #include <srb.h>
 #include <scsi.h>
+#include <ntddscsi.h>
+#include <ntdddisk.h>
 #include <initguid.h>
 #include <wdmguid.h>
 #include <..\bmaster.h>
@@ -229,10 +231,18 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
 
   PSCSI_REQUEST_BLOCK      CurrentSrb;                        // Текущий SCSI_REQUEST_BLOCK
   BOOLEAN                  ExpectingInterrupt;                // Ожидаемое прерывание
+  BOOLEAN                  RDP;                               // Indicate last tape command was DSC Restrictive.
+  BOOLEAN                  DWordIO;                           // 32-bit PIO
+  BOOLEAN                  BusMaster;                         // Текущая операция - Bus master операция
+  PUSHORT                  DataBuffer;                        // Указатель на буфер данных
+  ULONG                    WordsLeft;                         // Осталось передать слов (по 2 байта)
+  UCHAR                    SmartCommand;                      // Значения подкоманды последней команды SMART
+  UCHAR                    ReturningMediaStatus;              // Значение регистра Status после команды GET_MEDIA_STATUS
 
   PDEVICE_OBJECT           AtaXDevicePdo[MAX_IDE_DEVICE];     // Указатели на дочерние PDO
   IDENTIFY_DATA            FullIdentifyData[MAX_IDE_DEVICE];  // Identify данные для каждого устройства ("паспорт" устройства)
   USHORT                   DeviceFlags[MAX_IDE_DEVICE];       // Флаги устройства
+  UCHAR                    MaximumBlockXfer[MAX_IDE_DEVICE];  // Кол-во блоков пересылаемых за одно прерывание согласно "паспорта" устройства
   INQUIRYDATA              InquiryData[MAX_IDE_DEVICE];       // Inquiry данные для каждого устройства
 
   HW_DEVICE_EXTENSION      HwDeviceExtension;                 // Параметры контроллера
