@@ -3,6 +3,7 @@ list(APPEND SOURCE
     atax.c
     ataxinit.c
     ataxfdo.c
+    ataxpdo.c
     atax.h)
 
 add_library(atax SHARED ${SOURCE} atax.rc)
