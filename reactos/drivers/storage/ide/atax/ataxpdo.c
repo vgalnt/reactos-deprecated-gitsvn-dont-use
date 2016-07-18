@@ -103,7 +103,19 @@ ASSERT(FALSE);
 
         case SCSIOP_INQUIRY:            /* 0x12 */
           DPRINT("IRP_MJ_SCSI / SRB_FUNCTION_EXECUTE_SCSI / SCSIOP_INQUIRY (PIO mode)\n");
-ASSERT(FALSE);
+          Srb->SrbFlags &= ~SRB_FLAGS_USE_DMA;  // PIO mode
+          if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE ) //if ATAPI
+          {
+            break;// --> IoStartPacket
+          }
+          else
+          {
+            DPRINT("IRP_MJ_SCSI / SRB_FUNCTION_EXECUTE_SCSI / SCSIOP_INQUIRY - FIXME non ATAPI\n");
+            //Status = AtaXSendAtaInquiry(AtaXChannelFdoExtension, Srb);
+            ASSERT(FALSE);
+            Status = STATUS_NOT_SUPPORTED;
+            return Status;
+          }
 
         case SCSIOP_MODE_SELECT:        /* 0x15 */
           DPRINT("IRP_MJ_SCSI / SRB_FUNCTION_EXECUTE_SCSI / SCSIOP_MODE_SELECT FIXME\n");
