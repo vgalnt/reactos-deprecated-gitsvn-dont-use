@@ -244,6 +244,7 @@ PciIdeXPdoQueryResourceRequirements(
 	RtlZeroMemory(RequirementsList, ListSize);
 	RequirementsList->ListSize = ListSize;
 	RequirementsList->AlternativeLists = 1;
+	RequirementsList->InterfaceType = 1;
 
 	RequirementsList->List[0].Version = 1;
 	RequirementsList->List[0].Revision = 1;
@@ -256,12 +257,11 @@ PciIdeXPdoQueryResourceRequirements(
 	Descriptor->Type = CmResourceTypePort;
 	Descriptor->ShareDisposition = CmResourceShareDeviceExclusive;
 	Descriptor->Flags = CM_RESOURCE_PORT_IO |
-	                    CM_RESOURCE_PORT_16_BIT_DECODE |
-	                    CM_RESOURCE_PORT_POSITIVE_DECODE;
-	Descriptor->u.Port.Length = 7;
+	                    CM_RESOURCE_PORT_16_BIT_DECODE;//| CM_RESOURCE_PORT_POSITIVE_DECODE;
+	Descriptor->u.Port.Length = 8;
 	Descriptor->u.Port.Alignment = 1;
 	Descriptor->u.Port.MinimumAddress.QuadPart = (ULONGLONG)CommandPortBase;
-	Descriptor->u.Port.MaximumAddress.QuadPart = (ULONGLONG)(CommandPortBase + 7 - 1);
+	Descriptor->u.Port.MaximumAddress.QuadPart = (ULONGLONG)(CommandPortBase + 8 - 1);
 	Descriptor++;
 
 	/* Control port base */
@@ -269,8 +269,7 @@ PciIdeXPdoQueryResourceRequirements(
 	Descriptor->Type = CmResourceTypePort;
 	Descriptor->ShareDisposition = CmResourceShareDeviceExclusive;
 	Descriptor->Flags = CM_RESOURCE_PORT_IO |
-	                    CM_RESOURCE_PORT_16_BIT_DECODE |
-	                    CM_RESOURCE_PORT_POSITIVE_DECODE;
+	                    CM_RESOURCE_PORT_16_BIT_DECODE;// | CM_RESOURCE_PORT_POSITIVE_DECODE;
 	Descriptor->u.Port.Length = 1;
 	Descriptor->u.Port.Alignment = 1;
 	Descriptor->u.Port.MinimumAddress.QuadPart = (ULONGLONG)ControlPortBase;
@@ -280,8 +279,8 @@ PciIdeXPdoQueryResourceRequirements(
 	/* Interrupt */
 	Descriptor->Option = 0; /* Required */
 	Descriptor->Type = CmResourceTypeInterrupt;
-	Descriptor->ShareDisposition = CmResourceShareShared;
-	Descriptor->Flags = CM_RESOURCE_INTERRUPT_LEVEL_SENSITIVE;
+	Descriptor->ShareDisposition = CmResourceShareShared;//CmResourceShareDeviceExclusive;//CmResourceShareShared;
+	Descriptor->Flags = CM_RESOURCE_INTERRUPT_LATCHED;//CM_RESOURCE_INTERRUPT_LEVEL_SENSITIVE;  //(?? CM_RESOURCE_INTERRUPT_LATCHED == CM_RESOURCE_INTERRUPT_LEVEL_LATCHED_BITS);
 	Descriptor->u.Interrupt.MinimumVector = InterruptVector;
 	Descriptor->u.Interrupt.MaximumVector = InterruptVector;
 
