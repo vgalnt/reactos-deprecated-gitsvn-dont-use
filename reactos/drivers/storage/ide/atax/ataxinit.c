@@ -4,6 +4,178 @@
 #include <debug.h>
 
 
+NTSTATUS
+AtaXSendInquiry(
+    PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN ULONG DeviceNumber)
+{
+  PPDO_DEVICE_EXTENSION  AtaXDevicePdoExtension;
+  PINQUIRYDATA           InquiryBuffer;
+  PSENSE_DATA            SenseBuffer;
+  KEVENT                 Event;
+  KIRQL                  Irql;
+  BOOLEAN                KeepTrying = TRUE;
+  IO_STATUS_BLOCK        IoStatusBlock;
+  PIRP                   Irp;
+  PIO_STACK_LOCATION     IrpStack;
+  SCSI_REQUEST_BLOCK     Srb;
+  PCDB                   Cdb;
+  ULONG                  RetryCount = 0;
+  NTSTATUS               Status;
+
+
+  DPRINT("AtaXSendInquiry: AtaXChannelFdoExtension - %p\n", AtaXChannelFdoExtension);
+
+  AtaXDevicePdoExtension = AtaXChannelFdoExtension->AtaXDevicePdo[DeviceNumber]->DeviceExtension;
+
+  InquiryBuffer = ExAllocatePool(NonPagedPool, INQUIRYDATABUFFERSIZE);
+  if ( InquiryBuffer == NULL )
+    return STATUS_INSUFFICIENT_RESOURCES;
+
+  SenseBuffer = ExAllocatePool(NonPagedPool, SENSE_BUFFER_SIZE);
+  if ( SenseBuffer == NULL )
+  {
+    ExFreePool(InquiryBuffer);
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+
+  while ( KeepTrying )
+  {
+    KeInitializeEvent(&Event, NotificationEvent, FALSE);
+
+    Irp = IoBuildDeviceIoControlRequest(
+                 IOCTL_SCSI_EXECUTE_IN,
+                 AtaXChannelFdoExtension->CommonExtension.SelfDevice,
+                 NULL,
+                 0,
+                 InquiryBuffer,
+                 INQUIRYDATABUFFERSIZE,
+                 TRUE,
+                 &Event,
+                 &IoStatusBlock);
+
+    if ( Irp == NULL )
+    {
+      DPRINT("AtaXSendInquiry: IoBuildDeviceIoControlRequest() failed\n");
+      return STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    RtlZeroMemory(&Srb, sizeof(SCSI_REQUEST_BLOCK));
+
+    Srb.Length          = sizeof(SCSI_REQUEST_BLOCK);
+    Srb.OriginalRequest = Irp;
+    Srb.PathId          = AtaXDevicePdoExtension->PathId;
+    Srb.TargetId        = AtaXDevicePdoExtension->TargetId;
+    Srb.Lun             = AtaXDevicePdoExtension->Lun;
+    Srb.Function        = SRB_FUNCTION_EXECUTE_SCSI;
+    Srb.SrbFlags        = SRB_FLAGS_DATA_IN | SRB_FLAGS_DISABLE_SYNCH_TRANSFER;
+    Srb.TimeOutValue    = 4;
+    Srb.CdbLength       = 6;
+
+    Srb.SenseInfoBuffer       = SenseBuffer;
+    Srb.SenseInfoBufferLength = SENSE_BUFFER_SIZE;
+
+    Srb.DataBuffer            = InquiryBuffer;
+    Srb.DataTransferLength    = INQUIRYDATABUFFERSIZE;
+
+    IrpStack = IoGetNextIrpStackLocation (Irp);
+    IrpStack->Parameters.Scsi.Srb = &Srb;
+
+    Cdb = (PCDB)Srb.Cdb;
+    Cdb->CDB6INQUIRY.OperationCode     = SCSIOP_INQUIRY;
+    Cdb->CDB6INQUIRY.LogicalUnitNumber = AtaXDevicePdoExtension->Lun;
+    Cdb->CDB6INQUIRY.AllocationLength  = INQUIRYDATABUFFERSIZE;
+
+    Status = IoCallDriver(AtaXDevicePdoExtension->CommonExtension.SelfDevice, Irp);
+
+    if ( Status == STATUS_PENDING )
+    {
+      DPRINT("AtaXSendInquiry: Waiting for the driver to process request...\n");
+      KeWaitForSingleObject(&Event, Executive, KernelMode, FALSE, NULL);
+      Status = IoStatusBlock.Status;
+    }
+
+    DPRINT("AtaXSendInquiry: Request processed by driver, status = 0x%08X\n", Status);
+
+    if ( SRB_STATUS(Srb.SrbStatus) == SRB_STATUS_SUCCESS )
+    {
+      RtlCopyMemory(&AtaXChannelFdoExtension->InquiryData[DeviceNumber],
+                    InquiryBuffer,
+                    INQUIRYDATABUFFERSIZE);
+
+      Status = STATUS_SUCCESS;
+      KeepTrying = FALSE;
+    }
+    else
+    {
+      DPRINT("AtaXSendInquiry: Inquiry SRB failed with SrbStatus 0x%08X\n", Srb.SrbStatus);
+      DPRINT("AtaXSendInquiry: SenseBuffer->SenseKey - %x\n", SenseBuffer->SenseKey);
+
+      if ( Srb.SrbStatus & SRB_STATUS_QUEUE_FROZEN )
+      {
+        KeepTrying = FALSE;
+
+        DPRINT("AtaXSendInquiry: the queue is frozen at TargetId %d\n", Srb.TargetId);
+
+        AtaXDevicePdoExtension->Flags &= ~LUNEX_FROZEN_QUEUE;
+
+        KeAcquireSpinLock(&AtaXChannelFdoExtension->SpinLock, &Irql);
+        AtaXGetNextRequest(AtaXChannelFdoExtension, AtaXDevicePdoExtension);
+        KeLowerIrql(Irql);
+      }
+
+      if ( SRB_STATUS(Srb.SrbStatus) == SRB_STATUS_DATA_OVERRUN )
+      {
+        DPRINT("AtaXSendInquiry: Data overrun at TargetId %d\n", Srb.TargetId);
+
+        RtlCopyMemory(&AtaXChannelFdoExtension->InquiryData,
+                      InquiryBuffer,
+                      (Srb.DataTransferLength > INQUIRYDATABUFFERSIZE) ?
+                      INQUIRYDATABUFFERSIZE : Srb.DataTransferLength);
+
+        Status = STATUS_SUCCESS;
+        KeepTrying = FALSE;
+      }
+      else if ( (Srb.SrbStatus & SRB_STATUS_AUTOSENSE_VALID) &&
+                 SenseBuffer->SenseKey == SCSI_SENSE_ILLEGAL_REQUEST )
+      {
+        Status = STATUS_INVALID_DEVICE_REQUEST;
+        KeepTrying = FALSE;
+      }
+      else
+      {
+        if ( (RetryCount < 2) &&
+             (SRB_STATUS(Srb.SrbStatus) != SRB_STATUS_NO_DEVICE) &&
+             (SRB_STATUS(Srb.SrbStatus) != SRB_STATUS_SELECTION_TIMEOUT) )
+        {
+          RetryCount++;
+          KeepTrying = TRUE;
+        }
+        else
+        {
+          KeepTrying = FALSE;
+
+          if ( SRB_STATUS(Srb.SrbStatus) == SRB_STATUS_BAD_FUNCTION ||
+               SRB_STATUS(Srb.SrbStatus) == SRB_STATUS_BAD_SRB_BLOCK_LENGTH )
+          {
+            Status = STATUS_INVALID_DEVICE_REQUEST;
+          }
+          else
+          {
+            Status = STATUS_IO_DEVICE_ERROR;
+          }
+        }
+      }
+    }
+  }
+
+  ExFreePool(InquiryBuffer);
+  ExFreePool(SenseBuffer);
+
+  DPRINT("AtaXSendInquiry: done with Status 0x%08X\n", Status);
+  return Status;
+}
+
 BOOLEAN
 AtaXIssueIdentify(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,

@@ -6,6 +6,7 @@
 #include <wdm.h>
 #include <ide.h>
 #include <srb.h>
+#include <scsi.h>
 #include <initguid.h>
 #include <wdmguid.h>
 #include <..\bmaster.h>
@@ -87,6 +88,15 @@ extern ULONG AtaXChannelCounter; // Нумерация каналов
 #define IDE_STATUS_CORRECTED_ERROR   0x04
 #define IDE_STATUS_INDEX             0x02
 #define IDE_STATUS_ERROR             0x01
+
+//
+// LUN Extension flags
+//
+#define LUNEX_FROZEN_QUEUE           0x0001
+#define LUNEX_NEED_REQUEST_SENSE     0x0004
+#define LUNEX_BUSY                   0x0008
+#define LUNEX_FULL_QUEUE             0x0010
+#define LUNEX_REQUEST_PENDING        0x0020
 
 //
 // Определениe структур
@@ -189,6 +199,7 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
   PDEVICE_OBJECT           AtaXDevicePdo[MAX_IDE_DEVICE];     // Указатели на дочерние PDO
   IDENTIFY_DATA            FullIdentifyData[MAX_IDE_DEVICE];  // Identify данные для каждого устройства ("паспорт" устройства)
   USHORT                   DeviceFlags[MAX_IDE_DEVICE];       // Флаги устройства
+  INQUIRYDATA              InquiryData[MAX_IDE_DEVICE];       // Inquiry данные для каждого устройства
 
   HW_DEVICE_EXTENSION      HwDeviceExtension;                 // Параметры контроллера
 
