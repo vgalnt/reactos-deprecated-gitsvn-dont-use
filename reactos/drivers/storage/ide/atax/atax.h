@@ -279,6 +279,9 @@ typedef struct _PDO_DEVICE_EXTENSION {                    //// PDO расширение At
 VOID 
 AtaXWaitOnBusy(IN PATAX_REGISTERS_2 AtaXRegisters2);
 
+VOID 
+AtaXWaitOnBaseBusy(IN PATAX_REGISTERS_1 AtaXRegisters1);
+
 VOID
 AtaXWaitForDrq(IN PATAX_REGISTERS_2 AtaXRegisters2);
 
@@ -292,6 +295,11 @@ ULONG
 AtaXMapError(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
     IN PSCSI_REQUEST_BLOCK Srb);
+
+VOID
+AtaXNotification(
+    IN SCSI_NOTIFICATION_TYPE NotificationType,
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension, ...);
 
 // ataxfdo.c
 NTSTATUS

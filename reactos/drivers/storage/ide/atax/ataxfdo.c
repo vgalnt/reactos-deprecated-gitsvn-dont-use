@@ -387,10 +387,10 @@ InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
   UCHAR                  StatusByte;
   UCHAR                  InterruptReason;
   BOOLEAN                Result      = FALSE;
-  BOOLEAN                AtapiDevice = FALSE;
+  //BOOLEAN                AtapiDevice = FALSE;
   BOOLEAN                BusMaster   = FALSE;
   ULONG                  WordCount = 0;
-  ULONG                  WordsThisInterrupt = 256;
+  //ULONG                  WordsThisInterrupt = 256;
   ULONG                  Status;
   ULONG                  BusMasterStatus;
   ULONG                  ix;
@@ -492,8 +492,8 @@ InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
   {
     // ATAPI устройство
     InterruptReason = (READ_PORT_UCHAR(AtaXRegisters1->InterruptReason) & 3);
-    AtapiDevice = TRUE;
-    WordsThisInterrupt = 256;
+    //AtapiDevice = TRUE;
+    //WordsThisInterrupt = 256;
   }
   else
   {
@@ -505,8 +505,8 @@ InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
 
     if ( StatusByte & IDE_STATUS_DRQ )
     {
-      if ( AtaXChannelFdoExtension->MaximumBlockXfer[Srb->TargetId] )
-        WordsThisInterrupt = 256 * AtaXChannelFdoExtension->MaximumBlockXfer[Srb->TargetId];
+      //if ( AtaXChannelFdoExtension->MaximumBlockXfer[Srb->TargetId] )
+      //  WordsThisInterrupt = 256 * AtaXChannelFdoExtension->MaximumBlockXfer[Srb->TargetId];
 
       if ( Srb->SrbFlags & SRB_FLAGS_DATA_IN )
       {

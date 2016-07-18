@@ -5,6 +5,58 @@
 
 
 VOID
+AtaxMediaStatus(
+    BOOLEAN EnableMSN,
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    ULONG Channel)
+{
+  PATAX_REGISTERS_1  AtaXRegisters1;
+  UCHAR              StatusByte;
+  UCHAR              ErrorByte;
+
+  DPRINT("AtaxMediaStatus: AtaXChannelFdoExtension - %p, Channel - %x\n", AtaXChannelFdoExtension, Channel);
+
+  AtaXRegisters1 = &AtaXChannelFdoExtension->BaseIoAddress1;
+
+  if ( EnableMSN == TRUE )
+  {
+    if ( (AtaXChannelFdoExtension->DeviceFlags[Channel] & DFLAGS_REMOVABLE_DRIVE) )  // if supported
+    {
+      // enable Media Status Notification support
+      WRITE_PORT_UCHAR(AtaXRegisters1->SectorCount,0x95);
+      WRITE_PORT_UCHAR(AtaXRegisters1->Command, IDE_COMMAND_SET_FEATURES);
+
+      AtaXWaitOnBaseBusy(AtaXRegisters1);
+      StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+
+      if  ( StatusByte & IDE_STATUS_ERROR )
+      {
+        ErrorByte = READ_PORT_UCHAR(AtaXRegisters1->Error);  // Read the error register.
+        DPRINT("IdeMediaStatus: Error enabling media status. Status %x, error byte %x\n", StatusByte, ErrorByte);
+      }
+      else
+      {
+        AtaXChannelFdoExtension->DeviceFlags[Channel] |= DFLAGS_MEDIA_STATUS_ENABLED;
+        DPRINT("IdeMediaStatus: Media Status Notification Supported\n");
+        AtaXChannelFdoExtension->ReturningMediaStatus = 0;
+      }
+    }
+  }
+  else
+  { 
+    // disable if previously enabled
+    if ( (AtaXChannelFdoExtension->DeviceFlags[Channel] & DFLAGS_MEDIA_STATUS_ENABLED) )
+    {
+      WRITE_PORT_UCHAR(AtaXRegisters1->SectorCount, 0x31);
+      WRITE_PORT_UCHAR(AtaXRegisters1->Command, IDE_COMMAND_SET_FEATURES);
+  
+      AtaXWaitOnBaseBusy(AtaXRegisters1);
+      AtaXChannelFdoExtension->DeviceFlags[Channel] &= ~DFLAGS_MEDIA_STATUS_ENABLED;
+    }
+  }
+}
+
+VOID
 AtaXGetNextRequest(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
     IN PPDO_DEVICE_EXTENSION  AtaXDevicePdoExtension)
@@ -546,7 +598,7 @@ AtaXDeviceSetup(
   UCHAR              PioMode = 0;
   UCHAR              DmaMode = 0;
   UCHAR              AdvancedPIOModes;
-  //BOOLEAN            EnableMSN;
+  BOOLEAN            EnableMSN;
 
   DPRINT("AtaXDeviceSetup: FIXME. AtaXChannelFdoExtension - %p, DeviceNumber - %x\n", AtaXChannelFdoExtension, DeviceNumber);
 
@@ -648,9 +700,8 @@ AtaXDeviceSetup(
     }
     else if ( AtaXChannelFdoExtension->DeviceFlags[DeviceNumber] & DFLAGS_DEVICE_PRESENT )
     {
-ASSERT(FALSE);
-//      EnableMSN = TRUE;//enable Media Status Notification support
-//      AtaxMediaStatus(EnableMSN, AtaXChannelFdoExtension, DeviceNumber);
+      EnableMSN = TRUE;//enable Media Status Notification support
+      AtaxMediaStatus(EnableMSN, AtaXChannelFdoExtension, DeviceNumber);
     }
   }
 
