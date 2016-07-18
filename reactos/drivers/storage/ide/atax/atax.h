@@ -117,9 +117,18 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
   UCHAR                    Padded1;
   KAFFINITY                InterruptAffinity;
 
+  PDEVICE_OBJECT           AtaXDevicePdo[MAX_IDE_DEVICE];     // Указатели на дочерние PDO
+
   HW_DEVICE_EXTENSION      HwDeviceExtension;                 // Параметры контроллера
 
 } FDO_CHANNEL_EXTENSION, *PFDO_CHANNEL_EXTENSION;
+
+typedef struct _PDO_DEVICE_EXTENSION {                    //// PDO расширение AtaXDevice
+
+  COMMON_ATAX_DEVICE_EXTENSION  CommonExtension;                // Общее и для PDO и для FDO расширение
+
+
+} PDO_DEVICE_EXTENSION, *PPDO_DEVICE_EXTENSION; 
 
 //
 // Определения функций
