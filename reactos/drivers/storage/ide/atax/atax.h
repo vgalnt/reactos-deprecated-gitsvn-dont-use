@@ -63,6 +63,20 @@ extern ULONG AtaXChannelCounter; // Нумерация каналов
 #define IDE_COMMAND_SET_FEATURES     0xEF
 
 //
+// Определения команд для ATAPI устройств
+//
+#define ATAPI_MODE_SENSE             0x5A
+#define ATAPI_MODE_SELECT            0x55
+#define ATAPI_FORMAT_UNIT            0x24
+
+//
+// Определения для управления ATA/ATAPI устройствами
+//
+#define IDE_DC_REENABLE_CONTROLLER   0x00  // Разрешить прерывания для канала
+#define IDE_DC_DISABLE_INTERRUPTS    0x02  // Запретить прерывания для канала
+#define IDE_DC_RESET_CONTROLLER      0x04  // Сбросить канал
+
+//
 // Определения статуса для ATA/ATAPI устройств
 //
 #define IDE_STATUS_BUSY              0x80
@@ -203,6 +217,14 @@ typedef struct _PDO_DEVICE_EXTENSION {                    //// PDO расширение At
 //
 
 // atax.c
+VOID 
+AtaXWaitOnBusy(IN PATAX_REGISTERS_2 AtaXRegisters2);
+
+VOID 
+AtaXSoftReset(
+    IN PATAX_REGISTERS_1 AtaXRegisters1,
+    IN PATAX_REGISTERS_2 AtaXRegisters2,
+    IN ULONG DeviceNumber);
 
 // ataxfdo.c
 NTSTATUS
