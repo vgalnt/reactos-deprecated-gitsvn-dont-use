@@ -446,6 +446,7 @@ AtaXChannelFdoQueryDeviceRelations(
 {
   NTSTATUS                Status = STATUS_SUCCESS;
   PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  PPDO_DEVICE_EXTENSION   AtaXDevicePdoExtension;
   PDEVICE_OBJECT          AtaXDevicePdo;
   UNICODE_STRING          DeviceName;
   WCHAR                   DeviceString[80];
@@ -505,9 +506,37 @@ AtaXChannelFdoQueryDeviceRelations(
 
     DPRINT("AtaXChannelFdoQueryDeviceRelations: sizeof(PDO_DEVICE_EXTENSION) - %x\n", sizeof(PDO_DEVICE_EXTENSION));
 
-ASSERT(FALSE);
+    // Новый PDO создан. Заполняем поля объекта и его расширения
+    AtaXDevicePdo->AlignmentRequirement = AtaXChannelFdo->AlignmentRequirement;
+    if ( AtaXDevicePdo->AlignmentRequirement < 1 )
+      AtaXDevicePdo->AlignmentRequirement = 1;
+    
+    AtaXDevicePdoExtension = AtaXDevicePdo->DeviceExtension;
+    RtlZeroMemory(AtaXDevicePdoExtension, sizeof(PDO_DEVICE_EXTENSION));
 
+    AtaXDevicePdoExtension->CommonExtension.IsFDO      = FALSE;
+    AtaXDevicePdoExtension->CommonExtension.SelfDriver = AtaXChannelFdo->DriverObject;
+    AtaXDevicePdoExtension->CommonExtension.SelfDevice = AtaXDevicePdo;
+
+    AtaXDevicePdoExtension->AtaXChannelFdoExtension    = AtaXChannelFdoExtension;
+
+    AtaXDevicePdoExtension->PathId   = (UCHAR)AtaXChannelFdoExtension->Channel;
+    AtaXDevicePdoExtension->TargetId = (UCHAR)TargetId;
+    AtaXDevicePdoExtension->Lun      = 0;
+
+    AtaXDevicePdoExtension->MaxQueueCount = 256;
+    KeInitializeDeviceQueue(&AtaXDevicePdoExtension->DeviceQueue);  // инициализируем очередь IRPs
+
+    AtaXChannelFdoExtension->AtaXDevicePdo[TargetId] = AtaXDevicePdo;
+    Count++;
+
+    AtaXDevicePdo->Flags |= DO_DIRECT_IO;
+    AtaXDevicePdo->Flags &= ~DO_DEVICE_INITIALIZING;
+
+    DPRINT("AtaXChannelFdoQueryDeviceRelations: AtaXDevicePdo - %p, AtaXDevicePdoExtension - %p\n", AtaXDevicePdo, AtaXDevicePdoExtension);
   }
+
+ASSERT(FALSE);
 
   return STATUS_SUCCESS;
 }

@@ -127,6 +127,17 @@ typedef struct _PDO_DEVICE_EXTENSION {                    //// PDO расширение At
 
   COMMON_ATAX_DEVICE_EXTENSION  CommonExtension;                // Общее и для PDO и для FDO расширение
 
+  ULONG                    Flags;                          // Флаги PDO расширения 
+  PFDO_CHANNEL_EXTENSION   AtaXChannelFdoExtension;        // Указатель на расширение родительского FDO
+  UCHAR                    PathId;                         // Номер канала (Primari или Secondary)
+  UCHAR                    TargetId;                       // Номер девайса (Master или Slave)
+  UCHAR                    Lun;                            // Не используется в AtaX (0)
+
+  // Очередь IRPs для устройства
+  KDEVICE_QUEUE            DeviceQueue;                    // Структура для поддержки очереди из IRPs
+  ULONG                    MaxQueueCount;                  // Максимальное количество IRPs в очереди
+  ULONG                    QueueCount;                     // Счётчик IRPs в очереди
+  ULONG                    SortKey;                        // Индекс сортировки
 
 } PDO_DEVICE_EXTENSION, *PPDO_DEVICE_EXTENSION; 
 
