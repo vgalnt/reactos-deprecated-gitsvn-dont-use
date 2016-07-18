@@ -46,6 +46,12 @@ typedef struct _PDO_DEVICE_EXTENSION
 
 	ULONG Channel;
 	PDEVICE_OBJECT ControllerFdo;
+
+	PDMA_ADAPTER DmaAdapter;
+	ULONG NumberOfMapRegisters;
+	PVOID CommonBuffer;
+	PHYSICAL_ADDRESS LogicalAddress;
+
 } PDO_DEVICE_EXTENSION, *PPDO_DEVICE_EXTENSION;
 
 /* fdo.c */

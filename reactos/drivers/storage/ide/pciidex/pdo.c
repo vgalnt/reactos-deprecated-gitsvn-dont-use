@@ -355,6 +355,81 @@ PciIdeXPdoQueryDeviceRelations(
 	return STATUS_SUCCESS;
 }
 
+static NTSTATUS
+PciIdeXStartChannel(
+	IN PDEVICE_OBJECT DeviceObject,
+	IN PIRP Irp)
+{
+	PPDO_DEVICE_EXTENSION DeviceExtension;
+	PFDO_DEVICE_EXTENSION FdoDeviceExtension; //ControllerFdoExtension
+	PDMA_ADAPTER          DmaAdapter;
+	PDMA_OPERATIONS       DmaOperations;
+	DEVICE_DESCRIPTION    DeviceDescription;
+	PVOID                 CommonBuffer;
+	ULONG                 Length;
+
+	DPRINT("PciIdeXStartChannel: DeviceObject - %p, Irp - %p\n", DeviceObject, Irp);
+
+	DeviceExtension = (PPDO_DEVICE_EXTENSION)DeviceObject->DeviceExtension;
+	FdoDeviceExtension = (PFDO_DEVICE_EXTENSION)DeviceExtension->ControllerFdo->DeviceExtension;
+
+        RtlZeroMemory(&DeviceDescription, sizeof(DEVICE_DESCRIPTION));
+
+	DeviceDescription.Version           = DEVICE_DESCRIPTION_VERSION;
+	DeviceDescription.Master            = TRUE;
+	DeviceDescription.ScatterGather     = TRUE;
+	DeviceDescription.DemandMode        = FALSE;
+	DeviceDescription.AutoInitialize    = FALSE;
+	DeviceDescription.Dma32BitAddresses = TRUE;
+	DeviceDescription.IgnoreCount       = FALSE;
+	DeviceDescription.InterfaceType     = PCIBus; //?InterfaceTypeUndefined
+	DeviceDescription.MaximumLength     = 0x20000;
+
+	DmaAdapter = IoGetDmaAdapter(FdoDeviceExtension->LowerDevice,
+				     &DeviceDescription,
+				     &DeviceExtension->NumberOfMapRegisters);
+
+	if ( DmaAdapter == NULL )
+	{
+		DPRINT1("PciIdeXStartChannel: IoGetDmaAdapter() failed\n");
+	}
+	else
+	{
+		DeviceExtension->DmaAdapter = DmaAdapter;
+		DmaOperations = DmaAdapter->DmaOperations;
+		Length = DeviceExtension->NumberOfMapRegisters * sizeof(PHYSICAL_ADDRESS);
+
+		DPRINT("PciIdeXStartChannel: DmaAdapter - %p, *DmaAdapter - %p\n", DmaAdapter, *(PULONG)DmaAdapter);
+		DPRINT("PciIdeXStartChannel: DmaOperations - %x\n", DmaOperations);
+		DPRINT("PciIdeXStartChannel: Length - %x\n", Length);
+
+		CommonBuffer = DmaOperations->AllocateCommonBuffer(
+					DmaAdapter, 
+					Length, 
+					(PPHYSICAL_ADDRESS)&DeviceExtension->LogicalAddress,
+					FALSE); //CacheEnabled
+
+		DPRINT("PciIdeXStartChannel: CommonBuffer - %x\n", CommonBuffer);
+		DPRINT("PciIdeXStartChannel: DeviceExtension->LogicalAddress.LowPart - %x\n", DeviceExtension->LogicalAddress.LowPart);
+		DPRINT("PciIdeXStartChannel: DeviceExtension->LogicalAddress.HighPart - %x\n", DeviceExtension->LogicalAddress.HighPart);
+
+		DeviceExtension->CommonBuffer = CommonBuffer;
+
+		if ( !DeviceExtension->CommonBuffer )
+			DPRINT(" PciIdeXStartChannel: No RDT!\n");
+		
+		if ( !DeviceExtension->LogicalAddress.QuadPart )
+			DPRINT(" PciIdeXStartChannel: No PRDT!\n");
+		
+		if ( DeviceExtension->CommonBuffer )
+		{
+			RtlZeroMemory(DeviceExtension->CommonBuffer, Length);
+		}
+	}
+
+	return STATUS_SUCCESS;
+}
+
 NTSTATUS NTAPI
 PciIdeXPdoPnpDispatch(
 	IN PDEVICE_OBJECT DeviceObject,
@@ -405,7 +480,7 @@ PciIdeXPdoPnpDispatch(
 		case IRP_MN_START_DEVICE: /* 0x00 */
 		{
 			DPRINT("IRP_MJ_PNP / IRP_MN_START_DEVICE\n");
-			Status = STATUS_SUCCESS;
+			Status = PciIdeXStartChannel(DeviceObject, Irp);
 			break;
 		}
                 case IRP_MN_QUERY_REMOVE_DEVICE: /* 0x01 */
