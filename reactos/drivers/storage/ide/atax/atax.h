@@ -27,7 +27,21 @@ extern ULONG AtaXChannelCounter; // Нумерация каналов
 //
 // Flags
 //
+#define ATAX_DEVICE_BUSY             0x00000001
+#define ATAX_LU_ACTIVE               0x00000002
+#define ATAX_NOTIFICATION_NEEDED     0x00000004
+#define ATAX_NEXT_REQUEST_READY      0x00000008
+#define ATAX_FLUSH_ADAPTERS          0x00000010
+#define ATAX_MAP_TRANSFER            0x00000020
+#define ATAX_RESET                   0x00000080
+#define ATAX_RESET_REQUEST           0x00000100
+#define ATAX_RESET_REPORTED          0x00000200
+#define ATAX_REQUEST_PENDING         0x00000800
 #define ATAX_DISCONNECT_ALLOWED      0x00001000
+#define ATAX_DISABLE_INT_REQUESET    0x00002000
+#define ATAX_DISABLE_INTERRUPTS      0x00004000
+#define ATAX_ENABLE_INT_REQUEST      0x00008000
+#define ATAX_TIMER_NEEDED            0x00010000
 
 //
 // Определения флагов для расширения IDE устройств
@@ -168,6 +182,19 @@ typedef struct _COMMON_ATAX_DEVICE_EXTENSION {
 
 } COMMON_ATAX_DEVICE_EXTENSION, *PCOMMON_ATAX_DEVICE_EXTENSION;
 
+typedef struct _SCSI_REQUEST_BLOCK_INFO {
+
+  LIST_ENTRY                        Requests;
+  PSCSI_REQUEST_BLOCK               Srb;
+  PCHAR                             DataOffset;
+  PVOID                             SaveSenseRequest;
+  ULONG                             SequenceNumber;
+
+  struct _SCSI_REQUEST_BLOCK_INFO * CompletedRequests;
+
+} SCSI_REQUEST_BLOCK_INFO, *PSCSI_REQUEST_BLOCK_INFO;
+
+
 typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение AtaXChannel
 
   COMMON_ATAX_DEVICE_EXTENSION   CommonExtension;          // Общее и для PDO и для FDO расширений
@@ -220,6 +247,8 @@ typedef struct _PDO_DEVICE_EXTENSION {                    //// PDO расширение At
   ULONG                    MaxQueueCount;                  // Максимальное количество IRPs в очереди
   ULONG                    QueueCount;                     // Счётчик IRPs в очереди
   ULONG                    SortKey;                        // Индекс сортировки
+
+  SCSI_REQUEST_BLOCK_INFO  SrbInfo;
 
 } PDO_DEVICE_EXTENSION, *PPDO_DEVICE_EXTENSION; 
 
