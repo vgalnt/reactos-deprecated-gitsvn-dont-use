@@ -22,6 +22,11 @@ extern ULONG AtaXDeviceCounter;  // Нумерация устройств
 extern ULONG AtaXChannelCounter; // Нумерация каналов
 
 //
+// SRB Flag Bits (not best variant - FIXME)
+//
+#define SRB_FLAGS_USE_DMA            0x00001000
+
+//
 // Определение выбора IDE устройства
 //
 #define IDE_DRIVE_SELECT             0xA0
@@ -315,5 +320,11 @@ AddChannelFdo(
 // ataxinit.c
 BOOLEAN
 AtaXDetectDevices(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension);
+
+// ataxpdo.c
+NTSTATUS
+AtaXDevicePdoDispatchScsi(
+    IN PDEVICE_OBJECT AtaXDevicePdo,
+    IN PIRP Irp);
 
 #endif /* _ATAX_PCH_ */

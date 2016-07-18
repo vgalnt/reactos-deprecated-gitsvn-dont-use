@@ -314,6 +314,8 @@ AtaXDispatchScsi(
     IN PDEVICE_OBJECT DeviceObject,
     IN PIRP Irp)
 {
+  NTSTATUS Status;
+
   DPRINT("AtaXDispatchScsi: ... \n");
   if (((PCOMMON_ATAX_DEVICE_EXTENSION)DeviceObject->DeviceExtension)->IsFDO)
   {
@@ -322,8 +324,9 @@ AtaXDispatchScsi(
   }
   else
   {
-    ASSERT(FALSE);
-    return STATUS_NOT_SUPPORTED;
+    Status = AtaXDevicePdoDispatchScsi(DeviceObject, Irp);
+    DPRINT("AtaXDispatchScsi: AtaXDevicePdoDispatchScsi return - %x\n", Status);
+    return Status;
   }
 }
 
