@@ -102,6 +102,31 @@ ASSERT(FALSE);
   return SrbStatus;
 }
 
+PSCSI_REQUEST_BLOCK_INFO
+AtaXGetSrbData(IN PSCSI_REQUEST_BLOCK Srb)
+{
+  PSCSI_REQUEST_BLOCK_INFO  SrbData;
+  PDEVICE_OBJECT            AtaXDevicePdo;
+  PPDO_DEVICE_EXTENSION     AtaXDevicePdoExtension;
+  PIRP                      Irp;
+
+  Irp = Srb->OriginalRequest;
+
+  if ( Irp )
+  {
+    AtaXDevicePdo = IoGetCurrentIrpStackLocation(Irp)->DeviceObject;
+    AtaXDevicePdoExtension = (PPDO_DEVICE_EXTENSION)AtaXDevicePdo->DeviceExtension;
+    SrbData = &AtaXDevicePdoExtension->SrbInfo;
+  }
+  else
+  { 
+    SrbData = 0;
+  }
+
+  return SrbData;
+}
+
+
 VOID
 AtaXNotification(
     IN SCSI_NOTIFICATION_TYPE NotificationType,
