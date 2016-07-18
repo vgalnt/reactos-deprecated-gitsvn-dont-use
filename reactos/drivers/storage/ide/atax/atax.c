@@ -74,7 +74,7 @@ AtaXSoftReset(
   KeStallExecutionProcessor(500);
 }
 
-ULONG NTAPI 
+ULONG 
 AtaXMapError(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
     IN PSCSI_REQUEST_BLOCK Srb)
@@ -100,6 +100,137 @@ ASSERT(FALSE);
 
   Srb->ScsiStatus = ScsiStatus;  // Set SCSI status to indicate a check condition.
   return SrbStatus;
+}
+
+VOID
+AtaXNotification(
+    IN SCSI_NOTIFICATION_TYPE NotificationType,
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension, ...)
+{
+  va_list  ap;
+
+  DPRINT("AtaXNotification: NotificationType - %x\n", NotificationType);
+
+  va_start(ap, AtaXChannelFdoExtension);
+
+  switch ( NotificationType )
+  {
+    case RequestComplete:         /*  0  */
+    {
+      PSCSI_REQUEST_BLOCK       Srb;
+      PSCSI_REQUEST_BLOCK_INFO  SrbData;
+
+      Srb = (PSCSI_REQUEST_BLOCK) va_arg (ap, PSCSI_REQUEST_BLOCK);
+
+      DPRINT("AtaXNotification: RequestComplete (Srb %p)\n", Srb);
+
+      ASSERT(Srb->SrbStatus != SRB_STATUS_PENDING);
+      ASSERT(Srb->Function != SRB_FUNCTION_EXECUTE_SCSI ||
+             Srb->SrbStatus != SRB_STATUS_SUCCESS || Srb->ScsiStatus == SCSISTAT_GOOD);
+
+      if ( !(Srb->SrbFlags & SRB_FLAGS_IS_ACTIVE) )
+      {
+        va_end(ap);
+        return;
+      }
+
+      Srb->SrbFlags &= ~SRB_FLAGS_IS_ACTIVE;
+
+      if ( Srb->Function == SRB_FUNCTION_ABORT_COMMAND )
+      {
+        // TODO
+        ASSERT(FALSE);
+      }
+      else
+      {
+        SrbData = AtaXGetSrbData(Srb);
+
+        ASSERT(SrbData->CompletedRequests == NULL);
+        ASSERT(SrbData->Srb != NULL);
+
+        if ( (Srb->SrbStatus == SRB_STATUS_SUCCESS) &&
+            ((Srb->Cdb[0] == SCSIOP_READ) || (Srb->Cdb[0] == SCSIOP_WRITE)) )
+        {
+          ASSERT(Srb->DataTransferLength);
+        }
+
+        SrbData->CompletedRequests = AtaXChannelFdoExtension->InterruptData.CompletedRequests;
+        AtaXChannelFdoExtension->InterruptData.CompletedRequests = SrbData;
+      }
+
+      break;
+    }
+  
+    case NextRequest:             /*  1  */
+      DPRINT("AtaXNotification: NextRequest\n");
+      AtaXChannelFdoExtension->InterruptData.Flags |= ATAX_NEXT_REQUEST_READY;
+      break;
+  
+    case NextLuRequest:           /*  2  */
+      DPRINT1("AtaXNotification: NextLuRequest\n");
+      //DPRINT("AtaXNotification: NextLuRequest(PathId %u  TargetId %u  Lun %u)\n", PathId, TargetId, Lun);
+      AtaXChannelFdoExtension->InterruptData.Flags |= ATAX_NEXT_REQUEST_READY;
+      break;
+
+    case ResetDetected:           /*  3  */
+      DPRINT1("AtaXNotification: ResetDetected\n");
+      AtaXChannelFdoExtension->InterruptData.Flags |= ATAX_RESET | ATAX_RESET_REPORTED;
+      break;
+
+    case CallDisableInterrupts:   /*  4  */
+      DPRINT1("AtaXNotification: UNIMPLEMENTED SCSI Notification called: CallDisableInterrupts!\n");
+      break;
+
+    case CallEnableInterrupts:    /*  5  */
+      DPRINT1("AtaXNotification: UNIMPLEMENTED SCSI Notification called: CallEnableInterrupts!\n");
+      break;
+
+    case RequestTimerCall:        /*  6  */
+      DPRINT("AtaXNotification: : RequestTimerCall\n");
+      AtaXChannelFdoExtension->InterruptData.Flags |= ATAX_TIMER_NEEDED;
+      break;
+
+    case BusChangeDetected:       /*  7  */
+      DPRINT1("AtaXNotification: UNIMPLEMENTED SCSI Notification called: BusChangeDetected!\n");
+      break;
+
+    case WMIEvent:                /*  8  */
+      DPRINT1("AtaXNotification: UNIMPLEMENTED SCSI Notification called: WMIEvent!\n");
+      break;
+
+    case WMIReregister:           /*  9  */
+      DPRINT1("AtaXNotification: UNIMPLEMENTED SCSI Notification called: WMIReregister!\n");
+      break;
+
+    case LinkUp:                  /* 0xA */
+      DPRINT1("AtaXNotification: UNIMPLEMENTED SCSI Notification called: LinkUp!\n");
+      break;
+
+    case LinkDown:                /* 0xB */
+      DPRINT1("AtaXNotification: UNIMPLEMENTED SCSI Notification called: LinkDown!\n");
+      break;
+
+    case QueryTickCount:          /* 0xC */
+      DPRINT1("AtaXNotification: UNIMPLEMENTED SCSI Notification called: QueryTickCount!\n");
+      break;
+
+    case BufferOverrunDetected:   /* 0xD */
+      DPRINT1("AtaXNotification: UNIMPLEMENTED SCSI Notification called: BufferOverrunDetected!\n");
+      break;
+
+    case TraceNotification:       /* 0xE */
+      DPRINT1("AtaXNotification: UNIMPLEMENTED SCSI Notification called: TraceNotification!\n");
+      break;
+
+    default:
+      DPRINT1 ("AtaXNotification: Unknown notification type: %lu\n", NotificationType);
+      break;
+  }
+
+  va_end(ap);
+
+  // запрос DPC после обработки прерывания
+  AtaXChannelFdoExtension->InterruptData.Flags |= ATAX_NOTIFICATION_NEEDED;
 }
 
 VOID NTAPI
