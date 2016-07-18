@@ -534,6 +534,130 @@ AtaXIssueIdentify(
   return TRUE;
 }
 
+VOID
+AtaXDeviceSetup(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN ULONG DeviceNumber)
+{
+  PATAX_REGISTERS_1  AtaXRegisters1;
+  PATAX_REGISTERS_2  AtaXRegisters2;
+  PIDENTIFY_DATA     IdentifyData;
+  IDENTIFY_DATA      IdentifyNew;
+  UCHAR              Command;
+  UCHAR              PioMode = 0;
+  UCHAR              DmaMode = 0;
+  UCHAR              AdvancedPIOModes;
+  //BOOLEAN            EnableMSN;
+
+  DPRINT("AtaXDeviceSetup: FIXME. AtaXChannelFdoExtension - %p, DeviceNumber - %x\n", AtaXChannelFdoExtension, DeviceNumber);
+
+  //FIXME UDMA_MODE5, UDMA_MODE6 in ide.h and pciide ( ... #define UDMA_MODE6  (1 << 17) )
+
+  ASSERT(AtaXChannelFdoExtension);
+
+  AtaXRegisters1 = &AtaXChannelFdoExtension->BaseIoAddress1;
+  AtaXRegisters2 = &AtaXChannelFdoExtension->BaseIoAddress2;
+  IdentifyData   = &AtaXChannelFdoExtension->FullIdentifyData[DeviceNumber];
+
+  if ( IdentifyData->TranslationFieldsValid & 2 )
+  {
+    DPRINT("AtaXDeviceSetup: TranslationFieldsValid & 2\n");
+    AdvancedPIOModes = IdentifyData->AdvancedPIOModes & 3;
+
+    if ( AdvancedPIOModes )
+    {
+      if ( AdvancedPIOModes & 1 )
+        PioMode = 3;
+      if ( AdvancedPIOModes & 2 )
+        PioMode = 4;
+    }
+    else
+    {
+      switch ( IdentifyData->PioCycleTimingMode )
+      {
+        case 2:
+          PioMode = 2;
+          break;
+        case 1:
+          PioMode = 1;
+          break;
+        default:
+          PioMode = 0;
+          break;
+      }
+    }
+  }
+
+  if ( IdentifyData->TranslationFieldsValid & 4 )
+  {
+    DPRINT("AtaXDeviceSetup: FIXME TranslationFieldsValid & 4\n");
+    DmaMode = 2;  // 6 UDMA_MODE6 
+  }
+
+  DPRINT("AtaXDeviceSetup: PioMode - %x\n", PioMode);
+  DPRINT("AtaXDeviceSetup: DmaMode - %x\n", DmaMode);
+
+  AtaXChannelFdoExtension->DeviceFlags[DeviceNumber] &= ~DFLAGS_USE_DMA;  // установка режима PIO
+  //AtaXChannelFdoExtension->DeviceFlags[DeviceNumber] |= DFLAGS_USE_DMA;  // установка режима DMA
+
+  //Set transfer mode - Установка режима передачи данных (подкоманда команды SET FEATURES)
+  //-------------------------------------------------------------------------------------
+  WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect, (UCHAR)(((DeviceNumber & 1) << 4) | IDE_DRIVE_SELECT));
+  AtaXWaitOnBusy(AtaXRegisters2);
+
+  WRITE_PORT_UCHAR(AtaXRegisters1->Features, 0x03);
+
+  if ( AtaXChannelFdoExtension->DeviceFlags[DeviceNumber] & DFLAGS_USE_DMA )
+  {
+    //если используем DMA режим
+    DPRINT("AtaXDeviceSetup:  Write SET FEATURES command, Set transfer mode - DmaMode (Ultra DMA%d)\n", DmaMode);
+    WRITE_PORT_UCHAR(AtaXRegisters1->SectorCount, 0x40 + DmaMode); //0x40...0x47 - UDMA;
+    WRITE_PORT_UCHAR(AtaXRegisters1->Command, IDE_COMMAND_SET_FEATURES); // отправляем команду SET FEATURES
+  }
+  else
+  {
+    //если используем PIO режим
+    DPRINT("AtaXDeviceSetup: Write SET FEATURES command, Set transfer mode - PioMode %d\n", PioMode);
+    WRITE_PORT_UCHAR(AtaXRegisters1->SectorCount, 0x08 + PioMode); //0x08-0x0F - PIO
+    //WRITE_PORT_UCHAR(AtaXRegisters1->SectorCount, 0x40 + DmaMode); //0x40...0x47 - UDMA;
+    WRITE_PORT_UCHAR(AtaXRegisters1->Command, IDE_COMMAND_SET_FEATURES); // отправляем команду SET FEATURES
+
+    // ?? изменение PioMode не влияет на скорость передачи данных
+    // ?? возможно влияет WRITE_PORT_UCHAR(AtaXRegisters1->SectorCount, 0x40 + DmaMode); //0x40...0x47 - UDMA;
+    AtaXChangePioTimings(AtaXChannelFdoExtension, DeviceNumber, PioMode); // изменим тайминги
+ 
+   //FIXME 8.49  SET MULTIPLE MODE      IDE_COMMAND_SET_MULTIPLE (FullIdentifyData.CurrentMultiSectorSetting )
+  }
+  //-------------------------------------------------------------------------------------
+
+  // проверка ...
+  if ( AtaXChannelFdoExtension->DeviceFlags[DeviceNumber] & DFLAGS_ATAPI_DEVICE )
+    Command = IDE_COMMAND_ATAPI_IDENTIFY;
+  else
+    Command = IDE_COMMAND_IDENTIFY;
+
+  if ( AtaXIssueIdentify(AtaXChannelFdoExtension, &IdentifyNew, DeviceNumber, Command) )
+  {
+    DPRINT("AtaXDeviceSetup: IdentifyNew.PioCycleTimingMode - %x\n", IdentifyNew.PioCycleTimingMode);
+    DPRINT("AtaXDeviceSetup: IdentifyNew.UltraDMASupport    - %x\n", IdentifyNew.UltraDMASupport);
+    DPRINT("AtaXDeviceSetup: IdentifyNew.UltraDMAActive     - %x\n", IdentifyNew.UltraDMAActive);
+    DPRINT("AtaXDeviceSetup: IdentifyNew.DmaCycleTimingMode - %x\n", IdentifyNew.DmaCycleTimingMode);
+
+    if ( AtaXChannelFdoExtension->DeviceFlags[DeviceNumber] & DFLAGS_ATAPI_DEVICE )
+    {
+      ASSERT(FALSE);//AtaXSendInquiry(AtaXChannelFdoExtension, DeviceNumber);
+    }
+    else if ( AtaXChannelFdoExtension->DeviceFlags[DeviceNumber] & DFLAGS_DEVICE_PRESENT )
+    {
+ASSERT(FALSE);
+//      EnableMSN = TRUE;//enable Media Status Notification support
+//      AtaxMediaStatus(EnableMSN, AtaXChannelFdoExtension, DeviceNumber);
+    }
+  }
+
+  return;
+}
+
 BOOLEAN
 AtaXDetectDevices(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension)
 {
