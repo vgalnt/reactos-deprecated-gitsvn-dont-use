@@ -536,6 +536,10 @@ AtaXChannelFdoQueryDeviceRelations(
     DPRINT("AtaXChannelFdoQueryDeviceRelations: AtaXDevicePdo - %p, AtaXDevicePdoExtension - %p\n", AtaXDevicePdo, AtaXDevicePdoExtension);
   }
 
+  // Идентификация ATA/ATAPI устройств, подключенных к текущему каналу
+  Status = AtaXDetectDevices(AtaXChannelFdoExtension);
+  DPRINT("AtaXChannelFdoQueryDeviceRelations: AtaXDetectDevices return - %x\n", Status);
+
 ASSERT(FALSE);
 
   return STATUS_SUCCESS;
