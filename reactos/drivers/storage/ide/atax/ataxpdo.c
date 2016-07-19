@@ -540,9 +540,30 @@ ASSERT(FALSE);
 
     case IOCTL_SCSI_GET_ADDRESS:                       /* 0x041018 */
     {
+      PSCSI_ADDRESS Address = Irp->AssociatedIrp.SystemBuffer;
+
       DPRINT("IRP_MJ_DEVICE_CONTROL / IOCTL_SCSI_GET_ADDRESS\n");
-ASSERT(FALSE);
-      Status = 0;
+      if ( IoStack->Parameters.DeviceIoControl.OutputBufferLength >= sizeof(SCSI_ADDRESS) )
+      {
+        Address->Length     = sizeof(SCSI_ADDRESS);
+        Address->PortNumber = AtaXChannelFdoExtension->Channel;
+        Address->PathId     = AtaXDevicePdoExtension->PathId;
+        Address->TargetId   = AtaXDevicePdoExtension->TargetId;
+        Address->Lun        = AtaXDevicePdoExtension->Lun;
+  
+        Irp->IoStatus.Information = sizeof(SCSI_ADDRESS);
+        Irp->IoStatus.Status      = STATUS_SUCCESS;
+
+        Status = STATUS_SUCCESS;
+      }
+      else
+      {
+        Irp->IoStatus.Information = 0;
+        Irp->IoStatus.Status      = STATUS_BUFFER_TOO_SMALL;
+
+        Status = STATUS_BUFFER_TOO_SMALL;
+      }
+
       break;
     }
 
