@@ -401,6 +401,91 @@ AtaReadDriveCapacity(
 }
 
 NTSTATUS
+AtaModeSense(
+    IN PPDO_DEVICE_EXTENSION AtaXDevicePdoExtension,
+    IN PSCSI_REQUEST_BLOCK Srb)
+{
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  PATAX_REGISTERS_1       AtaXRegisters1;
+  PATAX_REGISTERS_2       AtaXRegisters2;
+  PIRP                    Irp;
+  UCHAR                   StatusByte;
+  UCHAR                   ErrorByte;
+  PMODE_PARAMETER_HEADER  ModeData;
+  NTSTATUS                Status;
+
+  DPRINT("AtaModeSense: ...\n");
+
+  ASSERT(AtaXDevicePdoExtension);
+
+  AtaXChannelFdoExtension = AtaXDevicePdoExtension->AtaXChannelFdoExtension;
+  AtaXRegisters1 = &AtaXChannelFdoExtension->BaseIoAddress1;
+  AtaXRegisters2 = &AtaXChannelFdoExtension->BaseIoAddress2;
+
+  // Это используется, чтобы определить является ли носитель защищенным от записи.
+  // Так как ATA не поддерживает MODE_SENSE, то мы изменим только часть, которая нужна
+  // так высокоуровневый драйвер может определить, защищен ли носитель.
+  
+  if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_MEDIA_STATUS_ENABLED )
+  {
+    // выбираем устройство
+    WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect, (UCHAR)(((Srb->TargetId & 1) << 4) | IDE_DRIVE_SELECT));
+    WRITE_PORT_UCHAR(AtaXRegisters1->Command, IDE_COMMAND_GET_MEDIA_STATUS);
+
+    AtaXWaitOnBusy(AtaXRegisters2);
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+    DPRINT(" AtaModeSense: StatusByte - %x\n", StatusByte);
+ 
+    if ( !(StatusByte & IDE_STATUS_ERROR) )
+    {
+      // ошибки нет, значит нет защиты носителя от записи
+      AtaXChannelFdoExtension->ExpectingInterrupt = FALSE;
+      Status = SRB_STATUS_SUCCESS;
+    }
+    else
+    {
+      // произошла ошибка, обрабатываем ее локально и сбрасываем прерывание
+
+      ErrorByte = READ_PORT_UCHAR(AtaXRegisters1->Error);
+      DPRINT(" AtaModeSense: ErrorByte - %x\n", ErrorByte);
+  
+      // cбрасываем прерывание, читая регистр состояние
+      StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+      DPRINT(" AtaModeSense: StatusByte - %x\n", StatusByte);
+
+      AtaXChannelFdoExtension->ExpectingInterrupt = FALSE;
+      Status = SRB_STATUS_SUCCESS;
+  
+      if ( ErrorByte & IDE_ERROR_DATA_ERROR )
+      {
+        // носитель является защищенными от записи
+        ModeData = (PMODE_PARAMETER_HEADER)Srb->DataBuffer;
+   
+        Srb->DataTransferLength = sizeof(MODE_PARAMETER_HEADER);
+        ModeData->DeviceSpecificParameter |= MODE_DSP_WRITE_PROTECT; // устанавливаем бит в буфере MODE_SENSE
+      }
+    }
+
+    Status = SRB_STATUS_SUCCESS;
+  }
+  else
+  {
+    Irp = Srb->OriginalRequest;
+    ASSERT(Irp);
+    Srb->DataTransferLength -= 4;
+    Irp->IoStatus.Information = Srb->DataTransferLength;
+    Status = STATUS_SUCCESS;
+    Srb->SrbStatus = SRB_STATUS_SUCCESS;
+  }
+
+  Irp->IoStatus.Status = Status;
+  IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+  DPRINT(" AtaModeSense: return - %x\n", Status);
+  return Status;
+}
+
+NTSTATUS
 AtaXDevicePdoDeviceControl(
     IN PDEVICE_OBJECT AtaXDevicePdo,
     IN PIRP Irp)

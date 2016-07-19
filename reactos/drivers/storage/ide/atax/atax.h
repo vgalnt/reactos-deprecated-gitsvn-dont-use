@@ -114,6 +114,20 @@ extern ULONG AtaXChannelCounter; // Нумерация каналов
 #define IDE_STATUS_ERROR             0x01
 
 //
+// IDE error definitions
+//
+#define IDE_ERROR_BAD_BLOCK          0x80
+#define IDE_ERROR_DATA_ERROR         0x40
+#define IDE_ERROR_MEDIA_CHANGE       0x20
+#define IDE_ERROR_ID_NOT_FOUND       0x10
+#define IDE_ERROR_MEDIA_CHANGE_REQ   0x08
+#define IDE_ERROR_COMMAND_ABORTED    0x04
+#define IDE_ERROR_END_OF_MEDIA       0x02
+#define IDE_ERROR_ILLEGAL_LENGTH     0x01
+
+#define MAX_TRANSFER_ERRORS          0x04
+
+//
 // LUN Extension flags
 //
 #define LUNEX_FROZEN_QUEUE           0x0001
