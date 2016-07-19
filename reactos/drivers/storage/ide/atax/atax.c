@@ -284,8 +284,35 @@ AtaSendCommand(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
     IN PSCSI_REQUEST_BLOCK Srb)
 {
-ASSERT(FALSE);
-  return 0;
+  NTSTATUS  Status;
+
+  DPRINT("AtaSendCommand: Command %x to device %d\n", Srb->Cdb[0], Srb->TargetId);
+  ASSERT(AtaXChannelFdoExtension);
+
+  switch ( Srb->Cdb[0] )
+  {
+    case SCSIOP_READ:              /* 0x28 */
+    case SCSIOP_WRITE:             /* 0x2A */
+      DPRINT("AtaSendCommand / SCSIOP_READ or SCSIOP_WRITE\n");
+      ASSERT(AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_DEVICE_PRESENT); //if ATA
+      AtaXChannelFdoExtension->CurrentSrb = Srb;
+      Status = AtaReadWrite(AtaXChannelFdoExtension, Srb);
+      DPRINT(" AtaSendCommand: return - %x\n", Status);
+      return Status;
+
+    case SCSIOP_TEST_UNIT_READY:
+      DPRINT("AtaSendCommand / SCSIOP_TEST_UNIT_READY FIXME\n");
+      Status = SRB_STATUS_INVALID_REQUEST;
+      break;
+
+    default:
+      DPRINT("AtaSendCommand: Unsupported command FIXME%x\n", Srb->Cdb[0]);
+      Status = SRB_STATUS_INVALID_REQUEST;
+      break;
+  }
+ 
+  DPRINT(" AtaSendCommand: return - %x\n", Status);
+  return Status;
 }
 
 VOID
