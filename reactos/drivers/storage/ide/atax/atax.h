@@ -294,6 +294,7 @@ typedef struct _PDO_DEVICE_EXTENSION {                    //// PDO расширение At
   UCHAR                    PathId;                         // Номер канала (Primari или Secondary)
   UCHAR                    TargetId;                       // Номер девайса (Master или Slave)
   UCHAR                    Lun;                            // Не используется в AtaX (0)
+  BOOLEAN                  Claimed;                        // Устройство захвачено
   LONG                     RequestTimeout;                 // Тайм-аут запроса
   ULONG                    AttemptCount;
   PIRP                     PendingRequest;

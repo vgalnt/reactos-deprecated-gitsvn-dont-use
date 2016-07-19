@@ -228,8 +228,15 @@ ASSERT(FALSE);
       return STATUS_PENDING;
 
     case SRB_FUNCTION_CLAIM_DEVICE:           /* 0x01 */
-      DPRINT("IRP_MJ_SCSI / SRB_FUNCTION_CLAIM_DEVICE \n");
-ASSERT(FALSE);
+      DPRINT1("IRP_MJ_SCSI / SRB_FUNCTION_CLAIM_DEVICE \n");
+      if ( AtaXDevicePdoExtension->Claimed )  // если устройство уже захвачено 
+      {
+        Status = STATUS_DEVICE_BUSY;
+        Srb->SrbStatus = SRB_STATUS_BUSY;
+        break;
+      }
+      AtaXDevicePdoExtension->Claimed = TRUE;  // устройство захвачено
+      Srb->DataBuffer = AtaXDevicePdo;
       Status = STATUS_SUCCESS;
       break;
 
