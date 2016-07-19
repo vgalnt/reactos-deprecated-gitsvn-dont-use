@@ -372,6 +372,11 @@ AtaXIssueIdentify(
     IN ULONG DeviceNumber,
     IN UCHAR Command);
 
+VOID
+AtaXGetNextRequest(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PPDO_DEVICE_EXTENSION  AtaXDevicePdoExtension);
+
 // ataxpdo.c
 NTSTATUS
 AtaXDevicePdoDispatchScsi(

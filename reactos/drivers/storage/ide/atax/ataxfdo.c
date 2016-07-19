@@ -1363,7 +1363,8 @@ AtaXChannelFdoQueryDeviceRelations(
   ULONG                   Count = 0;
   ULONG                   TargetId;
   ULONG                   ix;
-
+  PDEVICE_RELATIONS       DeviceRelations = NULL;
+  BOOLEAN                 IsResponded;
 
   DPRINT("AtaXChannelFdoQueryDeviceRelations (%p %p)\n", AtaXChannelFdo, Irp);
 
@@ -1447,11 +1448,31 @@ AtaXChannelFdoQueryDeviceRelations(
   }
 
   // Идентификация ATA/ATAPI устройств, подключенных к текущему каналу
-  Status = AtaXDetectDevices(AtaXChannelFdoExtension);
-  DPRINT("AtaXChannelFdoQueryDeviceRelations: AtaXDetectDevices return - %x\n", Status);
+  IsResponded = AtaXDetectDevices(AtaXChannelFdoExtension);
+  DPRINT("AtaXChannelFdoQueryDeviceRelations: AtaXDetectDevices return - %x\n", IsResponded);
 
-ASSERT(FALSE);
+  // Создаем и заполняем структуру DEVICE_RELATIONS.
+  // Указатель на нее (DeviceRelations) сохраняем в Irp->IoStatus.Information
+  if ( Count == 0 )
+    DeviceRelations = (PDEVICE_RELATIONS)ExAllocatePool(PagedPool, sizeof(DEVICE_RELATIONS));
+  else
+    DeviceRelations = (PDEVICE_RELATIONS)ExAllocatePool(PagedPool, sizeof(DEVICE_RELATIONS) + sizeof(PDEVICE_OBJECT) * (Count - 1));
 
+  if ( !DeviceRelations )
+    return STATUS_INSUFFICIENT_RESOURCES;
+ 
+  DeviceRelations->Count = Count;
+
+  for ( TargetId = 0, ix = 0; TargetId < MAX_IDE_DEVICE; TargetId++ )
+  {
+    if ( AtaXChannelFdoExtension->AtaXDevicePdo[TargetId] )
+    {
+      ObReferenceObject(AtaXChannelFdoExtension->AtaXDevicePdo[TargetId]);
+      DeviceRelations->Objects[ix++] = AtaXChannelFdoExtension->AtaXDevicePdo[TargetId];
+    }
+  }
+  
+  Irp->IoStatus.Information = (ULONG_PTR)DeviceRelations;
   return STATUS_SUCCESS;
 }
 

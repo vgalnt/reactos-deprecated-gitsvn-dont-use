@@ -696,7 +696,7 @@ AtaXDeviceSetup(
 
     if ( AtaXChannelFdoExtension->DeviceFlags[DeviceNumber] & DFLAGS_ATAPI_DEVICE )
     {
-      ASSERT(FALSE);//AtaXSendInquiry(AtaXChannelFdoExtension, DeviceNumber);
+      AtaXSendInquiry(AtaXChannelFdoExtension, DeviceNumber);
     }
     else if ( AtaXChannelFdoExtension->DeviceFlags[DeviceNumber] & DFLAGS_DEVICE_PRESENT )
     {
