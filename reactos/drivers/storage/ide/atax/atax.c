@@ -279,6 +279,50 @@ AtaXNotification(
   AtaXChannelFdoExtension->InterruptData.Flags |= ATAX_NOTIFICATION_NEEDED;
 }
 
+NTSTATUS
+AtaSendCommand(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PSCSI_REQUEST_BLOCK Srb)
+{
+ASSERT(FALSE);
+  return 0;
+}
+
+NTSTATUS
+AtapiSendCommand(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PSCSI_REQUEST_BLOCK Srb)
+{
+ASSERT(FALSE);
+  return 0;
+}
+
+NTSTATUS
+AtaXSendCommand(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PSCSI_REQUEST_BLOCK Srb)
+{
+  NTSTATUS  Status;
+
+  ASSERT(AtaXChannelFdoExtension);
+  ASSERT(AtaXChannelFdoExtension->CommonExtension.IsFDO);
+
+  if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )
+  {
+    Status = AtapiSendCommand(AtaXChannelFdoExtension, Srb);
+  }
+  else if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_DEVICE_PRESENT )
+  {
+    Status = AtaSendCommand(AtaXChannelFdoExtension, Srb);
+  }
+  else
+  {
+    Status = SRB_STATUS_SELECTION_TIMEOUT;
+  }
+
+  return Status;
+}
+
 BOOLEAN
 StartIo(
     IN PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension,
