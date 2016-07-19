@@ -884,6 +884,70 @@ AtaXChannelInterrupt(
   return Result;
 }
 
+BOOLEAN
+AtaXSaveInterruptData(IN PVOID Context)
+{
+  PATAX_SAVE_INTERRUPT      InterruptContext = Context;
+  PSCSI_REQUEST_BLOCK       Srb;
+  PSCSI_REQUEST_BLOCK_INFO  SrbInfo;
+  PFDO_CHANNEL_EXTENSION    AtaXChannelFdoExtension;
+  PPDO_DEVICE_EXTENSION     AtaXDevicePdoExtension;
+
+  AtaXChannelFdoExtension = InterruptContext->DeviceExtension;
+
+  if ( !(AtaXChannelFdoExtension->InterruptData.Flags & ATAX_NOTIFICATION_NEEDED) )
+  {
+    DPRINT("AtaXSaveInterruptData: return FALSE\n");
+    return FALSE;
+  }
+
+  *InterruptContext->InterruptData = AtaXChannelFdoExtension->InterruptData;
+
+  AtaXChannelFdoExtension->InterruptData.Flags &= (ATAX_RESET | ATAX_RESET_REQUEST | ATAX_DISABLE_INTERRUPTS);
+  AtaXChannelFdoExtension->InterruptData.CompletedRequests = NULL;
+
+  SrbInfo = InterruptContext->InterruptData->CompletedRequests;
+
+  while ( SrbInfo )
+  {
+    ASSERT(SrbInfo->Srb);
+    Srb = SrbInfo->Srb;
+
+    AtaXDevicePdoExtension = AtaXChannelFdoExtension->AtaXDevicePdo[Srb->TargetId]->DeviceExtension;
+
+    if ( Srb->SrbStatus != SRB_STATUS_SUCCESS &&
+         Srb->SrbStatus != SRB_STATUS_PENDING )
+    {
+      DPRINT("AtaXSaveInterruptData: Srb->SenseInfoBuffer       - %p\n", Srb->SenseInfoBuffer);
+      DPRINT("AtaXSaveInterruptData: Srb->SenseInfoBufferLength - %p\n", Srb->SenseInfoBufferLength);
+
+      if ( Srb->SenseInfoBuffer && Srb->SenseInfoBufferLength &&
+           Srb->ScsiStatus == SCSISTAT_CHECK_CONDITION )
+      {
+        if ( AtaXDevicePdoExtension->Flags & LUNEX_NEED_REQUEST_SENSE )
+        {
+          // Это означает: мы попытались отправить REQUEST SENSE, но безуспешно
+          Srb->ScsiStatus = SCSISTAT_GOOD;
+          Srb->SrbStatus = SRB_STATUS_REQUEST_SENSE_FAILED;
+        }
+        else
+        {
+          AtaXDevicePdoExtension->Flags |= LUNEX_NEED_REQUEST_SENSE;
+        }
+
+        if ( Srb->ScsiStatus == SCSISTAT_QUEUE_FULL )
+          ASSERT(FALSE);
+      }
+    }
+
+    AtaXDevicePdoExtension->RequestTimeout = -1;
+
+    SrbInfo = SrbInfo->CompletedRequests;
+  }
+
+  return TRUE;
+}
+
 VOID NTAPI
 AtaXDpc(
     IN PKDPC Dpc,
