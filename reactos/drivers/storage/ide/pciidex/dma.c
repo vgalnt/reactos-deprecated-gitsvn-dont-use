@@ -31,9 +31,43 @@ ASSERT(FALSE);
 NTSTATUS
 BusMasterStop(IN PPDO_DEVICE_EXTENSION DeviceExtension)//ChannelPdoExtension
 {
-  DPRINT("BusMasterDisable: ... \n");
-ASSERT(FALSE);
-  return 0;
+	PFDO_DEVICE_EXTENSION  ControllerFdoExtension;
+	ULONG  BusMasterChannelBase;
+
+
+	DPRINT("BusMasterDisable: DeviceExtension - %p\n", DeviceExtension);
+
+	ControllerFdoExtension = DeviceExtension->ControllerFdo->DeviceExtension;
+
+	BusMasterChannelBase = ControllerFdoExtension->BusMasterBase + 8 * (DeviceExtension->Channel & 1);
+	DPRINT("BusMasterDisable: BusMasterChannelBase - %p\n", BusMasterChannelBase);
+
+	/*
+	Start/Stop Bus Master: Writing a '1' to this bit enables bus master operation of the controller.
+	Bus master operation begins when this bit is detected changing from a zero to a one. The
+	controller will transfer data between the IDE device and memory only when this bit is set.
+	Master operation can be halted by writing a '0' to this bit.  All state information is lost when a '0'
+	is written; Master mode operation cannot be stopped and then resumed.  If this bit is reset while
+	bus master operation is still active (i.e., the Bus Master IDE Active bit of the Bus Master IDE
+	Status register for that IDE channel is set) and the drive has not yet finished its data transfer (The
+	Interupt bit in the Bus Master IDE Status register for that IDE channel is not set), the bus master
+	command is said to be aborted and data transfered from the drive may be discarded before being
+	written to system memory. This bit is intended to be reset after the data transfer is completed, as
+	indicated by either the  Bus Master IDE Active bit or the Interrupt bit of the Bus Master IDE
+	Status register for that IDE channel being set, or both. */
+
+	WRITE_PORT_UCHAR((PUCHAR)BusMasterChannelBase, 0);          //Stop Bus Master (Bus Master IDE Command Register)
+
+	/*
+	Interrupt:  This bit is set by the rising edge of the IDE interrupt line.  This bit is cleared when a
+	'1' is written to it by software.  Software can use this bit to determine if an IDE device has
+	asserted its interrupt line. When this bit is read as a one, all data transfered from the drive is
+	visible in system memory. */
+
+	WRITE_PORT_UCHAR((PUCHAR)(BusMasterChannelBase + 2), 4);    //Clear Interrupt bit (Bus Master IDE Status Register)
+
+	DPRINT("BusMasterDisable: return STATUS_SUCCESS\n");
+	return STATUS_SUCCESS;
 }
 
 ULONG
