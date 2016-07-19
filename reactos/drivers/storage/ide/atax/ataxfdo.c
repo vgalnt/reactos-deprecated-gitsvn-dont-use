@@ -384,6 +384,44 @@ ASSERT(FALSE);
   return Status;
 }
 
+ULONG
+Atapi2Scsi(
+    IN PSCSI_REQUEST_BLOCK Srb,
+    IN char *DataBuffer,
+    IN ULONG ByteCount)
+{
+  ULONG bytesAdjust = 0;
+
+  DPRINT("Atapi2Scsi: Srb->Cdb[0] == ATAPI_MODE_SENSE - %x\n", Srb->Cdb[0] == ATAPI_MODE_SENSE);
+
+  if ( Srb->Cdb[0] == ATAPI_MODE_SENSE )
+  {
+    PMODE_PARAMETER_HEADER_10  header_10 = (PMODE_PARAMETER_HEADER_10)DataBuffer;
+    PMODE_PARAMETER_HEADER     header    = (PMODE_PARAMETER_HEADER)DataBuffer;
+
+    header->ModeDataLength = header_10->ModeDataLengthLsb;
+    header->MediumType     = header_10->MediumType;
+
+    // ATAPI Mode Parameter Header doesn't have these fields
+    header->DeviceSpecificParameter = header_10->Reserved[0];
+    header->BlockDescriptorLength   = header_10->Reserved[1];
+
+    ByteCount -= sizeof(MODE_PARAMETER_HEADER_10);
+    if ( ByteCount > 0 )
+      RtlMoveMemory(DataBuffer+sizeof(MODE_PARAMETER_HEADER),
+                    DataBuffer+sizeof(MODE_PARAMETER_HEADER_10),
+                    ByteCount);
+
+    // change ATAPI_MODE_SENSE opcode back to SCSIOP_MODE_SENSE so that we don't convert again
+    Srb->Cdb[0] = SCSIOP_MODE_SENSE;
+
+    bytesAdjust = sizeof(MODE_PARAMETER_HEADER_10) -
+                  sizeof(MODE_PARAMETER_HEADER);
+  }
+
+  return bytesAdjust >> 1;  // convert to words
+}
+
 BOOLEAN 
 InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
 {
@@ -661,7 +699,8 @@ ASSERT(FALSE);
     if ( Srb->Cdb[0] == ATAPI_MODE_SENSE &&
          AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )
     {
-ASSERT(FALSE);
+      //конвертируем Atapi -> Scsi и корректируем WordCount
+      WordCount -= Atapi2Scsi(Srb, (char *)AtaXChannelFdoExtension->DataBuffer, WordCount << 1);
     }
 
     // корректируем адрес буфера данных и кол-во оставшихся для записи слов

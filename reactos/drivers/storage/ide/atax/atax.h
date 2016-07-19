@@ -224,6 +224,15 @@ typedef struct _MODE_SELECT_10 {
 
 } MODE_SELECT_10, *PMODE_SELECT_10;
 
+typedef struct _MODE_PARAMETER_HEADER_10 {
+
+  UCHAR  ModeDataLengthMsb;
+  UCHAR  ModeDataLengthLsb;
+  UCHAR  MediumType;
+  UCHAR  Reserved[5];
+
+} MODE_PARAMETER_HEADER_10, *PMODE_PARAMETER_HEADER_10;
+
 typedef struct _ATAX_INTERRUPT_DATA {
 
   ULONG                     Flags;                           // Interrupt дыруш
