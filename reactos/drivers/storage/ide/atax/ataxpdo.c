@@ -498,6 +498,68 @@ AtaXDevicePdoQueryId(
 }
 
 NTSTATUS
+AtaXDevicePdoQueryDeviceText(
+    IN PDEVICE_OBJECT AtaXDevicePdo,
+    IN PIRP Irp)
+{
+  PPDO_DEVICE_EXTENSION   AtaXDevicePdoExtension;
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  ULONG                   DeviceTextType;
+  PCWSTR                  SourceString;
+  UNICODE_STRING          String;
+
+  DPRINT("AtaXDevicePdoQueryDeviceText (%p %p)\n", AtaXDevicePdo, Irp);
+
+  DeviceTextType = IoGetCurrentIrpStackLocation(Irp)->Parameters.QueryDeviceText.DeviceTextType;
+  AtaXDevicePdoExtension = (PPDO_DEVICE_EXTENSION)AtaXDevicePdo->DeviceExtension;
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXDevicePdoExtension->AtaXChannelFdoExtension;
+
+  switch ( DeviceTextType )
+  {
+    case DeviceTextDescription:
+    {
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_TEXT / DeviceTextDescription\n");
+
+      if ( AtaXChannelFdoExtension->DeviceFlags[AtaXDevicePdoExtension->TargetId] & DFLAGS_DEVICE_PRESENT );
+      {
+        if ( AtaXChannelFdoExtension->DeviceFlags[AtaXDevicePdoExtension->TargetId] & DFLAGS_ATAPI_DEVICE )
+          SourceString = L"VBOX CD-ROM";
+        else
+          SourceString = L"VBOX HARDDISK";
+      }
+
+      break;
+    }
+
+    case DeviceTextLocationInformation:
+    {
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_TEXT / DeviceTextLocationInformation\n");
+      SourceString = L"0";
+      break;
+    }
+
+    default:
+    {
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_TEXT / unknown type 0x%lx\n", DeviceTextType);
+      ASSERT(FALSE);
+      return STATUS_NOT_SUPPORTED;
+    }
+  }
+
+  if ( RtlCreateUnicodeString(&String, SourceString) )
+  {
+    Irp->IoStatus.Information = (ULONG_PTR)String.Buffer;
+    DPRINT(" AtaXDevicePdoQueryDeviceText return - %p \n", STATUS_SUCCESS);
+    return STATUS_SUCCESS;
+  }
+  else
+  {
+    DPRINT(" AtaXDevicePdoQueryDeviceText return - STATUS_INSUFFICIENT_RESOURCES\n");
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+}
+
+NTSTATUS
 AtaXDevicePdoDispatchPnp(
     IN PDEVICE_OBJECT AtaXDevicePdo,
     IN PIRP Irp)
@@ -582,8 +644,7 @@ ASSERT(FALSE);
 
     case IRP_MN_QUERY_DEVICE_TEXT:            /* 0x0C */  //AtaXDevicePdoQueryDeviceText
       DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_TEXT\n");
-ASSERT(FALSE);
-      Status = 0;//AtaXDevicePdoQueryDeviceText(AtaXDevicePdo, Irp);
+      Status = AtaXDevicePdoQueryDeviceText(AtaXDevicePdo, Irp);
       break;
 
     case IRP_MN_QUERY_ID:                     /* 0x13 */  //AtaXDevicePdoQueryId
