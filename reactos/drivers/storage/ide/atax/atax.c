@@ -280,6 +280,159 @@ AtaXNotification(
 }
 
 NTSTATUS
+AtaReadWrite(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PSCSI_REQUEST_BLOCK Srb)
+{
+  PATAX_REGISTERS_1   AtaXRegisters1;
+  PIDENTIFY_DATA      IdentifyData;
+  UCHAR               StatusByte;
+  UCHAR               StatusByte2;
+  ULONG               StartingSector;
+  ULONG               WordCount;
+  USHORT              SectorsPerTrack;
+  USHORT              Heads;
+  ULONG               ix;
+  ULONG               DeviceNumber;
+  UCHAR               HighLBA;
+  UCHAR               MidLBA;
+  UCHAR               LowLBA;
+  UCHAR               DriveSelect;
+
+  DPRINT("AtaReadWrite: ... \n");
+
+  DeviceNumber = Srb->TargetId & 1;
+
+  IdentifyData = &AtaXChannelFdoExtension->FullIdentifyData[DeviceNumber];
+
+  SectorsPerTrack = IdentifyData->NumSectorsPerTrack;
+  Heads           = IdentifyData->NumHeads;
+
+  AtaXRegisters1 = &AtaXChannelFdoExtension->BaseIoAddress1;
+
+  // Выбираем устройство по DeviceNumber
+  WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect, (UCHAR)((DeviceNumber << 4) | IDE_DRIVE_SELECT));
+  StatusByte2 = READ_PORT_UCHAR(AtaXRegisters1->Status);
+
+  if ( StatusByte2 & IDE_STATUS_BUSY )
+  {
+    DPRINT("AtaReadWrite: Returning BUSY status\n");
+    Srb->SrbStatus = SRB_STATUS_BUSY;
+    return STATUS_DEVICE_BUSY;
+  }
+
+  AtaXChannelFdoExtension->DataBuffer         = (PUSHORT)Srb->DataBuffer;
+  AtaXChannelFdoExtension->WordsLeft          = Srb->DataTransferLength / 2;
+  AtaXChannelFdoExtension->ExpectingInterrupt = TRUE;  // следующее прерывание - ожидаемое
+
+  // устанавливаем регистр SectorCount
+  WRITE_PORT_UCHAR(AtaXRegisters1->SectorCount, (UCHAR)((Srb->DataTransferLength + 0x1FF) / 0x200));
+
+  // начальный сектор извлекаем из CDB
+  StartingSector = ((PCDB)Srb->Cdb)->CDB10.LogicalBlockByte3       |
+                   ((PCDB)Srb->Cdb)->CDB10.LogicalBlockByte2 << 8  |
+                   ((PCDB)Srb->Cdb)->CDB10.LogicalBlockByte1 << 16 |
+                   ((PCDB)Srb->Cdb)->CDB10.LogicalBlockByte0 << 24;
+
+  DPRINT("AtaReadWrite: Starting sector is %x, Number of bytes %x\n", StartingSector, Srb->DataTransferLength);
+
+  // устанавливаем регистр LowLBA
+  LowLBA =  (UCHAR)((StartingSector % SectorsPerTrack) + 1);
+  WRITE_PORT_UCHAR(AtaXRegisters1->LowLBA, LowLBA);
+
+  // устанавливаем регистр MidLBA
+  MidLBA =  (UCHAR)(StartingSector / (SectorsPerTrack * Heads));
+  WRITE_PORT_UCHAR(AtaXRegisters1->MidLBA, MidLBA);
+
+  // устанавливаем регистр HighLBA
+  HighLBA = (UCHAR)((StartingSector / (SectorsPerTrack * Heads)) >> 8);
+  WRITE_PORT_UCHAR(AtaXRegisters1->HighLBA, HighLBA);
+
+  // устанавливаем регистр DriveSelect
+  DriveSelect = (UCHAR)(((StartingSector / SectorsPerTrack) % Heads) | (DeviceNumber << 4) | 0xA0);
+  WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect, DriveSelect);
+
+  DPRINT("AtaReadWrite: Cylinder %x Head %x Sector %x\n",
+          StartingSector  / (SectorsPerTrack  * Heads),
+          (StartingSector /  SectorsPerTrack) % Heads,
+          StartingSector  %  SectorsPerTrack + 1);
+
+  // определяем - будем читать или записывать
+  if ( Srb->SrbFlags & SRB_FLAGS_DATA_IN )
+  {
+    // отправляем команду чтения
+    if ( Srb->SrbFlags & SRB_FLAGS_USE_DMA )
+    {
+ASSERT(FALSE);
+    }
+    else
+    {
+      AtaXChannelFdoExtension->BusMaster = FALSE;
+      WRITE_PORT_UCHAR(AtaXRegisters1->Command, IDE_COMMAND_READ);
+    }
+  }
+  else
+  {
+    // отправляем команду записи
+    if ( Srb->SrbFlags & SRB_FLAGS_USE_DMA )
+    {
+ASSERT(FALSE);
+    }
+    else
+    {
+      AtaXChannelFdoExtension->BusMaster = FALSE;
+
+      if ( AtaXChannelFdoExtension->MaximumBlockXfer[DeviceNumber] )
+      {
+        DPRINT("AtaReadWrite: FIXME MaximumBlockXfer\n");
+      }
+
+      WordCount = 256;
+      WRITE_PORT_UCHAR(AtaXRegisters1->Command, IDE_COMMAND_WRITE);
+    }
+
+    // ждем BSY и DRQ
+    AtaXWaitOnBaseBusy(AtaXRegisters1);
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+
+    if ( StatusByte & IDE_STATUS_BUSY )
+    {
+      DPRINT("AtaReadWrite: Returning BUSY status %x\n", StatusByte);
+      return SRB_STATUS_BUSY;
+    }
+
+    for ( ix = 0; ix < 1000; ix++ )
+    {
+      StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+      if ( StatusByte & IDE_STATUS_DRQ )
+        break;
+      KeStallExecutionProcessor(50);
+    }
+
+    if ( !(StatusByte & IDE_STATUS_DRQ) )
+    {
+      AtaXChannelFdoExtension->WordsLeft          = 0;
+      AtaXChannelFdoExtension->ExpectingInterrupt = FALSE;    // следующее прерывание не ожидаемое
+      AtaXChannelFdoExtension->CurrentSrb         = NULL;     // очищаем текущий запрос
+      return SRB_STATUS_TIMEOUT;
+    }
+
+    // записываем сектор (256 words)
+    DPRINT("AtaReadWrite: WRITE_PORT_BUFFER_USHORT %x, DataBuffer - %x, WordCount - %x\n",
+            AtaXRegisters1->Data, AtaXChannelFdoExtension->DataBuffer, WordCount);
+
+    WRITE_PORT_BUFFER_USHORT(AtaXRegisters1->Data, AtaXChannelFdoExtension->DataBuffer, WordCount);
+  
+    // корректируем адрес буфера данных и кол-во оставшихся для записи слов
+    AtaXChannelFdoExtension->WordsLeft -= WordCount;
+    AtaXChannelFdoExtension->DataBuffer += WordCount;
+  }
+
+  // ждём аппаратное прерывание
+  return STATUS_SUCCESS;
+}
+
+NTSTATUS
 AtaSendCommand(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
     IN PSCSI_REQUEST_BLOCK Srb)
