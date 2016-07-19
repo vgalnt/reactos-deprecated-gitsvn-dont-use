@@ -345,6 +345,62 @@ AtaXStorageQueryProperty(
 }
 
 NTSTATUS
+AtaReadDriveCapacity(
+    IN PPDO_DEVICE_EXTENSION AtaXDevicePdoExtension,
+    IN PIRP Irp,
+    IN PSCSI_REQUEST_BLOCK Srb)
+{
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  ULONG                   LastSector;
+  ULONG                   BytesPerSector;
+  ULONG                   tmp;
+  NTSTATUS                Status;
+
+  DPRINT("AtaReadDriveCapacity: AtaXDevicePdoExtension - %p, Irp - %p, Srb - %p\n", AtaXDevicePdoExtension, Irp, Srb);
+
+  AtaXChannelFdoExtension = AtaXDevicePdoExtension->AtaXChannelFdoExtension;
+
+  DPRINT("device %x - #sectors %x, #heads %x, #cylinders %x\n",
+          Srb->TargetId,
+          AtaXChannelFdoExtension->FullIdentifyData[Srb->TargetId].NumSectorsPerTrack,
+          AtaXChannelFdoExtension->FullIdentifyData[Srb->TargetId].NumHeads,
+          AtaXChannelFdoExtension->FullIdentifyData[Srb->TargetId].NumCylinders);
+
+  DPRINT("AtaReadDriveCapacity: UserAddressableSectors - %p \n", AtaXChannelFdoExtension->FullIdentifyData[Srb->TargetId].UserAddressableSectors);
+  DPRINT("AtaReadDriveCapacity: Max48BitLBA[0]         - %p \n", AtaXChannelFdoExtension->FullIdentifyData[Srb->TargetId].Max48BitLBA[0]);
+
+  //
+  tmp = 0x200; //512
+
+  ((PFOUR_BYTE)&BytesPerSector)->Byte0 = ((PFOUR_BYTE)&tmp)->Byte3;
+  ((PFOUR_BYTE)&BytesPerSector)->Byte1 = ((PFOUR_BYTE)&tmp)->Byte2;
+  ((PFOUR_BYTE)&BytesPerSector)->Byte2 = ((PFOUR_BYTE)&tmp)->Byte1;
+  ((PFOUR_BYTE)&BytesPerSector)->Byte3 = ((PFOUR_BYTE)&tmp)->Byte0;
+
+  ((PREAD_CAPACITY_DATA)Srb->DataBuffer)->BytesPerBlock = BytesPerSector;
+
+  //
+  tmp = AtaXChannelFdoExtension->FullIdentifyData[Srb->TargetId].UserAddressableSectors - 1;
+
+  ((PFOUR_BYTE)&LastSector)->Byte0 = ((PFOUR_BYTE)&tmp)->Byte3;
+  ((PFOUR_BYTE)&LastSector)->Byte1 = ((PFOUR_BYTE)&tmp)->Byte2;
+  ((PFOUR_BYTE)&LastSector)->Byte2 = ((PFOUR_BYTE)&tmp)->Byte1;
+  ((PFOUR_BYTE)&LastSector)->Byte3 = ((PFOUR_BYTE)&tmp)->Byte0;
+  
+  ((PREAD_CAPACITY_DATA)Srb->DataBuffer)->LogicalBlockAddress = LastSector;
+
+  Srb->SrbStatus = SRB_STATUS_SUCCESS;
+  Irp->IoStatus.Information = 8;
+
+  Status = STATUS_SUCCESS;
+  Irp->IoStatus.Status = Status;
+  IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+  DPRINT("AtaReadDriveCapacity return - %p \n", Status);
+  return Status;
+}
+
+NTSTATUS
 AtaXDevicePdoDeviceControl(
     IN PDEVICE_OBJECT AtaXDevicePdo,
     IN PIRP Irp)
@@ -537,7 +593,23 @@ ASSERT(FALSE);
 
         case SCSIOP_READ_CAPACITY:      /* 0x25 */
           DPRINT("IRP_MJ_SCSI / SRB_FUNCTION_EXECUTE_SCSI / SCSIOP_READ_CAPACITY\n");
-ASSERT(FALSE);
+          if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE ) //if ATAPI
+          {
+            break;  // --> IoStartPacket
+          }
+          else if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_DEVICE_PRESENT ) //if ATA
+          {
+            Status = AtaReadDriveCapacity(AtaXDevicePdoExtension, Irp, Srb);
+            DPRINT(" AtaXDevicePdoDispatchScsi: return - %p\n", Status);
+            DPRINT("\n");
+            return Status;
+          }
+          else //Error
+          {
+            DPRINT(" AtaXDevicePdoDispatchScsi: Error. DeviceFlags - %p\n", AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId]);
+            ASSERT(FALSE);
+            break;  // --> IoStartPacket
+          }
 
         case SCSIOP_READ_TOC:           /* 0x43 */
           DPRINT("IRP_MJ_SCSI / SRB_FUNCTION_EXECUTE_SCSI / SCSIOP_READ_TOC\n");
