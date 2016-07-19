@@ -3,6 +3,8 @@
 
 #include <ntddk.h>
 #include <stdio.h>
+#include <ntifs.h>
+
 #include <wdm.h>
 #include <ide.h>
 #include <srb.h>

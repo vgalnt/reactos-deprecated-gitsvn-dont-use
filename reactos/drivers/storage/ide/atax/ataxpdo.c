@@ -4,6 +4,50 @@
 #include <debug.h>
 
 
+NTSTATUS
+DuplicateUnicodeString(
+    IN ULONG Flags,
+    IN PCUNICODE_STRING SourceString,
+    OUT PUNICODE_STRING DestinationString)
+{
+  if (SourceString == NULL || DestinationString == NULL
+    || SourceString->Length > SourceString->MaximumLength
+    || (SourceString->Length == 0 && SourceString->MaximumLength > 0 && SourceString->Buffer == NULL)
+    || Flags == RTL_DUPLICATE_UNICODE_STRING_ALLOCATE_NULL_STRING || Flags >= 4)
+  {
+    return STATUS_INVALID_PARAMETER;
+  }
+
+  if ((SourceString->Length == 0)
+    && (Flags != (RTL_DUPLICATE_UNICODE_STRING_NULL_TERMINATE |
+                  RTL_DUPLICATE_UNICODE_STRING_ALLOCATE_NULL_STRING)))
+  {
+    DestinationString->Length = 0;
+    DestinationString->MaximumLength = 0;
+    DestinationString->Buffer = NULL;
+  }
+  else
+  {
+    USHORT DestMaxLength = SourceString->Length;
+    
+    if (Flags & RTL_DUPLICATE_UNICODE_STRING_NULL_TERMINATE)
+      DestMaxLength += sizeof(UNICODE_NULL);
+    
+    DestinationString->Buffer = ExAllocatePool(PagedPool, DestMaxLength);
+    if (DestinationString->Buffer == NULL)
+      return STATUS_NO_MEMORY;
+    
+    RtlCopyMemory(DestinationString->Buffer, SourceString->Buffer, SourceString->Length);
+    DestinationString->Length = SourceString->Length;
+    DestinationString->MaximumLength = DestMaxLength;
+    
+    if (Flags & RTL_DUPLICATE_UNICODE_STRING_NULL_TERMINATE)
+      DestinationString->Buffer[DestinationString->Length / sizeof(WCHAR)] = 0;
+  }
+  
+  return STATUS_SUCCESS;
+}
+
 BOOLEAN
 AtaXQueueAddIrp(
     IN PPDO_DEVICE_EXTENSION AtaXDevicePdoExtension,
@@ -348,6 +392,112 @@ ASSERT(FALSE);
 }
 
 NTSTATUS
+AtaXDevicePdoQueryId(
+    IN PDEVICE_OBJECT AtaXDevicePdo,
+    IN PIRP Irp)
+{
+  WCHAR                   Buffer[256];
+  ULONG                   Index = 0;
+  UNICODE_STRING          SourceString;
+  UNICODE_STRING          String;
+  NTSTATUS                Status;
+  ULONG                   IdType;
+  PPDO_DEVICE_EXTENSION   AtaXDevicePdoExtension;
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+
+  DPRINT("AtaXDevicePdoQueryId: FIXME (%p %p)\n", AtaXDevicePdo, Irp);
+  // FIXME - Id надо формировать из AtaXChannelFdoExtension->FullIdentifyData[DeviceNumber]
+
+  AtaXDevicePdoExtension = (PPDO_DEVICE_EXTENSION)AtaXDevicePdo->DeviceExtension;
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXDevicePdoExtension->AtaXChannelFdoExtension;
+
+  DPRINT("AtaXDevicePdoQueryId: AtaXDevicePdoExtension->TargetId - %x\n", AtaXDevicePdoExtension->TargetId);
+  DPRINT("AtaXDevicePdoQueryId: AtaXChannelFdoExtension->DeviceFlags[HwExtension->TargetId] - %p\n", AtaXChannelFdoExtension->DeviceFlags[AtaXDevicePdoExtension->TargetId]);
+
+  if ( !(AtaXChannelFdoExtension->DeviceFlags[AtaXDevicePdoExtension->TargetId] & DFLAGS_DEVICE_PRESENT) )
+    return STATUS_NOT_SUPPORTED;
+
+  IdType = IoGetCurrentIrpStackLocation(Irp)->Parameters.QueryId.IdType;
+
+  switch (IdType)
+  {
+    case BusQueryDeviceID:
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_ID / BusQueryDeviceID\n");
+      if ( AtaXChannelFdoExtension->DeviceFlags[AtaXDevicePdoExtension->TargetId] & DFLAGS_DEVICE_PRESENT );
+      {
+        if ( AtaXChannelFdoExtension->DeviceFlags[AtaXDevicePdoExtension->TargetId] & DFLAGS_ATAPI_DEVICE )
+          RtlInitUnicodeString(&SourceString, L"IDE\\CdRomVBOX_CD-ROM_____________________________1.0_____");
+        else
+          RtlInitUnicodeString(&SourceString, L"IDE\\DiskVBOX_HARDDISK___________________________1.0_____");
+      }
+      break;
+
+    case BusQueryHardwareIDs:
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_ID / BusQueryHardwareIDs\n");
+      if ( AtaXChannelFdoExtension->DeviceFlags[AtaXDevicePdoExtension->TargetId] & DFLAGS_DEVICE_PRESENT );
+      {
+        if ( AtaXChannelFdoExtension->DeviceFlags[AtaXDevicePdoExtension->TargetId] & DFLAGS_ATAPI_DEVICE )
+        {
+          //Index += swprintf(&Buffer[Index], L"IDE\\CdRomVBOX_CD-ROM_____________________________1.0_____") + 1;
+          //Index += swprintf(&Buffer[Index], L"IDE\\VBOX_CD-ROM_____________________________1.0_____") + 1;
+          //Index += swprintf(&Buffer[Index], L"IDE\\CdRomVBOX_CD-ROM_____________________________") + 1;
+          //Index += swprintf(&Buffer[Index], L"VBOX_CD-ROM_____________________________1.0_____") + 1;
+          Index += swprintf(&Buffer[Index], L"GenCdRom") + 1;
+        }          
+        else
+        {
+          //Index += swprintf(&Buffer[Index], L"IDE\\DiskVBOX_HARDDISK___________________________1.0_____") + 1;
+          //Index += swprintf(&Buffer[Index], L"IDE\\VBOX_HARDDISK___________________________1.0_____") + 1;
+          //Index += swprintf(&Buffer[Index], L"IDE\\DiskVBOX_HARDDISK___________________________") + 1;
+          //Index += swprintf(&Buffer[Index], L"VBOX_HARDDISK___________________________1.0_____") + 1;
+          Index += swprintf(&Buffer[Index], L"GenDisk") + 1;
+        }          
+
+        Buffer[Index] = UNICODE_NULL;
+        SourceString.Length = SourceString.MaximumLength = Index * sizeof(WCHAR);
+        SourceString.Buffer = Buffer;
+      }
+      break;
+
+    case BusQueryCompatibleIDs:
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_ID / BusQueryCompatibleIDs\n");
+      if ( AtaXChannelFdoExtension->DeviceFlags[AtaXDevicePdoExtension->TargetId] & DFLAGS_DEVICE_PRESENT );
+      {
+        if ( AtaXChannelFdoExtension->DeviceFlags[AtaXDevicePdoExtension->TargetId] & DFLAGS_ATAPI_DEVICE )
+          Index += swprintf(&Buffer[Index], L"GenCdRom") + 1;
+        else
+          Index += swprintf(&Buffer[Index], L"GenDisk") + 1;
+      }
+
+      Buffer[Index] = UNICODE_NULL;
+      SourceString.Length = SourceString.MaximumLength = Index * sizeof(WCHAR);
+      SourceString.Buffer = Buffer;
+      break;
+
+    case BusQueryInstanceID:
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_ID / BusQueryInstanceID\n");
+      swprintf(Buffer, L"%lu", AtaXDevicePdoExtension->TargetId);
+      RtlInitUnicodeString(&SourceString, Buffer);
+      break;
+
+    default:
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_ID / unknown query id type 0x%lx\n", IdType);
+      ASSERT(FALSE);
+      return STATUS_NOT_SUPPORTED;
+
+  }
+
+  Status = DuplicateUnicodeString(
+               RTL_DUPLICATE_UNICODE_STRING_NULL_TERMINATE,
+               &SourceString,
+               &String);
+
+  DPRINT(" AtaXDevicePdoQueryId return - %p \n", Status);
+  Irp->IoStatus.Information = (ULONG_PTR)String.Buffer;
+  return Status;
+}
+
+NTSTATUS
 AtaXDevicePdoDispatchPnp(
     IN PDEVICE_OBJECT AtaXDevicePdo,
     IN PIRP Irp)
@@ -438,8 +588,7 @@ ASSERT(FALSE);
 
     case IRP_MN_QUERY_ID:                     /* 0x13 */  //AtaXDevicePdoQueryId
       DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_ID\n");
-ASSERT(FALSE);
-      Status = 0;//AtaXDevicePdoQueryId(AtaXDevicePdo, Irp);
+      Status = AtaXDevicePdoQueryId(AtaXDevicePdo, Irp);
       break;
 
     case IRP_MN_QUERY_PNP_DEVICE_STATE:       /* 0x14 */  //AtaXDevicePdoQueryPnPDeviceState
