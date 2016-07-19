@@ -10,6 +10,8 @@
 #include <scsi.h>
 #include <ntddscsi.h>
 #include <ntdddisk.h>
+#include <ntddvol.h>
+#include <mountdev.h>
 #include <initguid.h>
 #include <wdmguid.h>
 #include <..\bmaster.h>
@@ -387,6 +389,11 @@ AtaXDevicePdoDispatchScsi(
 
 NTSTATUS
 AtaXDevicePdoDispatchPnp(
+    IN PDEVICE_OBJECT AtaXDevicePdo,
+    IN PIRP Irp);
+
+NTSTATUS
+AtaXDevicePdoDeviceControl(
     IN PDEVICE_OBJECT AtaXDevicePdo,
     IN PIRP Irp);
 

@@ -822,8 +822,7 @@ AtaXDispatchDeviceControl(
   }
   else
   {
-    ASSERT(FALSE);
-    return STATUS_NOT_SUPPORTED;
+    return AtaXDevicePdoDeviceControl(DeviceObject, Irp);
   }
 }
 

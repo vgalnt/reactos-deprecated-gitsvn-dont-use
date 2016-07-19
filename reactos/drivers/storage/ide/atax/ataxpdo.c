@@ -73,6 +73,93 @@ AtaXQueueAddIrp(
 }
 
 NTSTATUS
+AtaXDevicePdoDeviceControl(
+    IN PDEVICE_OBJECT AtaXDevicePdo,
+    IN PIRP Irp)
+{
+  PPDO_DEVICE_EXTENSION   AtaXDevicePdoExtension;
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  ULONG                   IoctlCode;
+  ULONG                   BaseCode;
+  ULONG                   FunctionCode;
+  NTSTATUS                Status;
+  PIO_STACK_LOCATION      IoStack = IoGetCurrentIrpStackLocation(Irp);
+
+  DPRINT("\n");
+  DPRINT(" AtaXDevicePdoDeviceControl: AtaXDevicePdo - %p, Irp - %p\n", AtaXDevicePdo, Irp);
+
+  AtaXDevicePdoExtension = AtaXDevicePdo->DeviceExtension;
+  ASSERT(AtaXDevicePdoExtension);
+  ASSERT(AtaXDevicePdoExtension->CommonExtension.IsFDO == FALSE);
+
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXDevicePdoExtension->AtaXChannelFdoExtension;
+  ASSERT(AtaXChannelFdoExtension);
+  ASSERT(AtaXChannelFdoExtension->CommonExtension.IsFDO);
+
+  IoctlCode    = IoStack->Parameters.DeviceIoControl.IoControlCode;;
+  BaseCode     = IoctlCode >> 16;
+  FunctionCode = (IoctlCode & (~0xFFFFC003)) >> 2;
+  DPRINT("AtaXDevicePdoDeviceControl: Ioctl Code = %lx, Base Code = %lx, Function Code = %lx\n", IoctlCode, BaseCode, FunctionCode);
+
+  Irp->IoStatus.Information = 0;
+
+  switch( IoctlCode )
+  {
+    case IOCTL_STORAGE_QUERY_PROPERTY:                 /* 0x2d1400 */
+      DPRINT("IRP_MJ_DEVICE_CONTROL / IOCTL_STORAGE_QUERY_PROPERTY\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXStorageQueryProperty(AtaXDevicePdoExtension, Irp);
+      break;
+
+    case IOCTL_SCSI_GET_INQUIRY_DATA:                  /* 0x04100C */
+    {
+ASSERT(FALSE);
+      Status = STATUS_SUCCESS;
+    } 
+    break;
+
+    case IOCTL_SCSI_GET_CAPABILITIES:                  /* 0x041010 */
+    {
+      DPRINT("IRP_MJ_DEVICE_CONTROL / IOCTL_SCSI_GET_CAPABILITIES\n");
+ASSERT(FALSE);
+      Status = 0;
+    } 
+    break;
+
+    case IOCTL_SCSI_GET_ADDRESS:                       /* 0x041018 */
+    {
+      DPRINT("IRP_MJ_DEVICE_CONTROL / IOCTL_SCSI_GET_ADDRESS\n");
+ASSERT(FALSE);
+      Status = 0;
+      break;
+    }
+
+    case IOCTL_VOLUME_GET_GPT_ATTRIBUTES:              /* 0x560038 */
+      DPRINT("IRP_MJ_DEVICE_CONTROL / IOCTL_VOLUME_GET_GPT_ATTRIBUTES FIXME\n");
+ASSERT(FALSE);
+      Status = STATUS_NOT_SUPPORTED;
+      break;
+
+    case IOCTL_MOUNTDEV_QUERY_STABLE_GUID:             /* 0x4d0018 */
+      DPRINT("IRP_MJ_DEVICE_CONTROL / IOCTL_MOUNTDEV_QUERY_STABLE_GUID FIXME\n");
+ASSERT(FALSE);
+      Status = STATUS_NOT_SUPPORTED;
+      break;
+
+
+    default:
+      DPRINT("IRP_MJ_DEVICE_CONTROL / Unknown IoctlCode FIXME%x\n", IoctlCode);
+      ASSERT(FALSE);
+      Status = STATUS_NOT_SUPPORTED;
+  }
+
+  Irp->IoStatus.Status = Status;
+  IoCompleteRequest(Irp, IO_NO_INCREMENT);
+  DPRINT(" AtaXDevicePdoDeviceControl return - %p \n", Status);
+  return Status;
+}
+
+NTSTATUS
 AtaXDevicePdoDispatchScsi(
     IN PDEVICE_OBJECT AtaXDevicePdo,
     IN PIRP Irp)
@@ -567,6 +654,18 @@ AtaXDevicePdoQueryDeviceText(
 }
 
 NTSTATUS
+AtaXDevicePdoStartDevice(
+    IN PDEVICE_OBJECT AtaXDevicePdo,
+    IN PIRP Irp)
+{
+  NTSTATUS  Status = STATUS_SUCCESS;
+  DPRINT("AtaXDevicePdoStartDevice (%p %p)\n", AtaXDevicePdo, Irp);
+
+  DPRINT(" AtaXDevicePdoStartDevice return - %p \n", Status);
+  return Status;
+}
+
+NTSTATUS
 AtaXDevicePdoDispatchPnp(
     IN PDEVICE_OBJECT AtaXDevicePdo,
     IN PIRP Irp)
@@ -584,8 +683,7 @@ AtaXDevicePdoDispatchPnp(
   {
     case IRP_MN_START_DEVICE:                 /* 0x00 */  //AtaXDevicePdoStartDevice
       DPRINT("IRP_MJ_PNP / IRP_MN_START_DEVICE\n");
-ASSERT(FALSE);
-      Status = 0;//AtaXDevicePdoStartDevice(AtaXDevicePdo, Irp);
+      Status = AtaXDevicePdoStartDevice(AtaXDevicePdo, Irp);
       break;
 
     case IRP_MN_QUERY_REMOVE_DEVICE:          /* 0x01 */
