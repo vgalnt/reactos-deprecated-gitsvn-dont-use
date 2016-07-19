@@ -6,6 +6,12 @@
 
 ULONG  AtaXDeviceCounter = 0;
 
+#ifdef NDEBUG
+  BOOLEAN AtaXDEBUG = FALSE;
+#else
+  BOOLEAN AtaXDEBUG = TRUE;
+#endif
+
 
 NTSTATUS
 AtaXPassDownIrpAndForget(
@@ -884,6 +890,240 @@ AtaXChannelInterrupt(
   return Result;
 }
 
+VOID 
+AtaXProcessCompletedRequest(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PSCSI_REQUEST_BLOCK_INFO SrbInfo,
+    OUT PBOOLEAN NeedToCallStartIo)
+{
+  PPDO_DEVICE_EXTENSION  AtaXDevicePdoExtension;
+  PSCSI_REQUEST_BLOCK    Srb;
+  PIRP                   Irp;
+
+  Srb = SrbInfo->Srb;
+  Irp = Srb->OriginalRequest;
+  DPRINT("AtaXProcessCompletedRequest: Srb - %p, Irp - %p\n", Srb, Irp);
+
+  AtaXDevicePdoExtension = (AtaXChannelFdoExtension->AtaXDevicePdo[Srb->TargetId])->DeviceExtension;
+
+  SrbInfo->Srb = NULL;
+
+  if ( Srb->SrbFlags & SRB_FLAGS_DISABLE_DISCONNECT )
+  {
+    DPRINT("AtaXProcessCompletedRequest: SRB_FLAGS_DISABLE_DISCONNECT. Srb->SrbFlags - %x\n", Srb->SrbFlags);
+    KeAcquireSpinLockAtDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+    AtaXChannelFdoExtension->Flags |= ATAX_DISCONNECT_ALLOWED;
+    if ( !(AtaXChannelFdoExtension->InterruptData.Flags & ATAX_RESET) )
+        AtaXChannelFdoExtension->TimerCount = -1;
+    KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+
+    DPRINT("AtaXProcessCompletedRequest: AtaXChannelFdoExtension->Flags - %x\n", AtaXChannelFdoExtension->Flags);
+
+    if ( !(AtaXChannelFdoExtension->Flags & ATAX_REQUEST_PENDING) &&
+         !(AtaXChannelFdoExtension->Flags & ATAX_DEVICE_BUSY)     &&
+         !(*NeedToCallStartIo) )
+    {
+      // нет занятости, и есть ожидание запроса
+      DPRINT("AtaXProcessCompletedRequest: !ATAX_REQUEST_PENDING && !ATAX_DEVICE_BUSY\n");
+      DPRINT("AtaXProcessCompletedRequest: IoStartNextPacket FIXME\n");
+      IoStartNextPacket(AtaXChannelFdoExtension->CommonExtension.SelfDevice, FALSE);
+    }
+  }
+
+  KeAcquireSpinLockAtDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+
+  // сохраняем размер данных в IoStatus.Information
+  Irp->IoStatus.Information = Srb->DataTransferLength;
+
+  SrbInfo->SequenceNumber = 0;
+
+  // уменьшаем счетчик очереди
+  AtaXDevicePdoExtension->QueueCount--;
+  DPRINT("AtaXProcessCompletedRequest: AtaXDevicePdoExtension->QueueCount - %x\n", AtaXDevicePdoExtension->QueueCount);
+
+  if ( Srb->QueueTag != SP_UNTAGGED )
+  {
+    DPRINT("AtaXProcessCompletedRequest: Srb->QueueTag != SP_UNTAGGED FIXME\n");
+  }
+ 
+  SrbInfo = NULL;
+
+  if ( AtaXChannelFdoExtension->Flags & ATAX_REQUEST_PENDING )
+  {
+    DPRINT("AtaXProcessCompletedRequest: if ATAX_REQUEST_PENDING\n");
+    AtaXChannelFdoExtension->Flags &= ~ATAX_REQUEST_PENDING;
+    *NeedToCallStartIo = TRUE;
+  }
+
+  if ( SRB_STATUS(Srb->SrbStatus) == SRB_STATUS_SUCCESS )
+  {
+    DPRINT("AtaXProcessCompletedRequest: SRB_STATUS_SUCCESS\n");
+    Irp->IoStatus.Status = STATUS_SUCCESS;
+
+    if ( !(Srb->SrbFlags & SRB_FLAGS_BYPASS_FROZEN_QUEUE) &&
+         (AtaXDevicePdoExtension->RequestTimeout == -1) )
+    {
+      DPRINT("AtaXProcessCompletedRequest: SRB_STATUS_SUCCESS  and  !SRB_FLAGS_BYPASS_FROZEN_QUEUE\n");
+      AtaXGetNextRequest(AtaXChannelFdoExtension, AtaXDevicePdoExtension);
+    }
+    else
+    {
+      DPRINT("AtaXProcessCompletedRequest: SRB_STATUS_SUCCESS  and  SRB_FLAGS_BYPASS_FROZEN_QUEUE\n");
+      KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+    }
+
+    IoCompleteRequest(Irp, IO_DISK_INCREMENT);
+    return;
+  }
+
+  DPRINT("AtaXProcessCompletedRequest: SrbStatus not SUCCESS !\n");
+
+ASSERT(FALSE);
+  //Irp->IoStatus.Status = AtaXConvertSrbStatus(Srb->SrbStatus);
+
+  DPRINT("AtaXProcessCompletedRequest: Srb->ScsiStatus - %x\n", Srb->ScsiStatus);
+
+  if ( AtaXDEBUG )
+    ASSERT(FALSE);//AtaXPrintSrbStatus(Srb->SrbStatus);
+
+  if ( AtaXDEBUG )
+    ASSERT(FALSE);//AtaXPrintSrbScsiStatus(Srb->ScsiStatus);
+
+  if ( Srb->SrbFlags & SRB_FLAGS_USE_DMA )
+  {
+    DPRINT("AtaXProcessCompletedRequest: FIXME! Error DMA transfer. Down speed to PIO. Srb - %p \n", Srb);
+  }
+
+  if ( (Srb->ScsiStatus == SCSISTAT_BUSY ||
+        Srb->SrbStatus  == SRB_STATUS_BUSY ||
+        Srb->ScsiStatus == SCSISTAT_QUEUE_FULL)
+       && !(Srb->SrbFlags & SRB_FLAGS_BYPASS_FROZEN_QUEUE) )
+  {
+    DPRINT("AtaXProcessCompletedRequest: It's not a bypass, it's busy or the queue is full\n");
+
+    if ( AtaXDevicePdoExtension->Flags & (LUNEX_FROZEN_QUEUE | LUNEX_BUSY) )
+    {
+      DPRINT("AtaXProcessCompletedRequest: it's being requeued\n");
+
+      Srb->SrbStatus = SRB_STATUS_PENDING;
+      Srb->ScsiStatus = 0;
+
+      if ( Srb->SrbFlags & SRB_FLAGS_USE_DMA )
+      {
+        DPRINT("AtaXProcessCompletedRequest: DMA Srb being requeued (SRB_FLAGS_BYPASS_FROZEN_QUEUE)\n");
+        ASSERT(FALSE);
+      }
+
+      if ( !KeInsertByKeyDeviceQueue(&AtaXDevicePdoExtension->DeviceQueue,
+                                    &Irp->Tail.Overlay.DeviceQueueEntry,
+                                    Srb->QueueSortKey) )
+      {
+        DPRINT("AtaXProcessCompletedRequest: !KeInsertByKeyDeviceQueue!\n");
+        Srb->SrbStatus = SRB_STATUS_ERROR;
+        Srb->ScsiStatus = SCSISTAT_BUSY;
+
+        ASSERT(FALSE);
+        goto Error;
+      }
+
+      KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+    }
+    else if (AtaXDevicePdoExtension->AttemptCount++ < 20)
+    {
+      DPRINT("AtaXProcessCompletedRequest: LUN is still busy\n");
+
+      Srb->ScsiStatus = 0;
+      Srb->SrbStatus = SRB_STATUS_PENDING;
+
+      AtaXDevicePdoExtension->BusyRequest = Irp;
+      AtaXDevicePdoExtension->Flags |= LUNEX_BUSY;
+
+      KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+    }
+    else
+    {
+
+Error:
+      DPRINT("AtaXProcessCompletedRequest: Freeze the queue\n");
+
+      Srb->SrbStatus |= SRB_STATUS_QUEUE_FROZEN;
+
+      AtaXDevicePdoExtension->Flags |= LUNEX_FROZEN_QUEUE;
+      AtaXDevicePdoExtension->Flags &= ~LUNEX_FULL_QUEUE;
+
+      KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+
+      Irp->IoStatus.Status = STATUS_DEVICE_NOT_READY;
+      IoCompleteRequest(Irp, IO_DISK_INCREMENT);
+    }
+
+    return;
+  }
+
+  if ( ((Srb->ScsiStatus != SCSISTAT_CHECK_CONDITION) ||
+       (Srb->SrbStatus & SRB_STATUS_AUTOSENSE_VALID) ||
+       !Srb->SenseInfoBuffer || !Srb->SenseInfoBufferLength)
+     && Srb->SrbFlags & SRB_FLAGS_NO_QUEUE_FREEZE )
+  {
+
+    if ( AtaXDevicePdoExtension->RequestTimeout == -1 )
+    {
+      DPRINT("AtaXProcessCompletedRequest: AtaXDevicePdoExtension->RequestTimeout - %x\n", AtaXDevicePdoExtension->RequestTimeout);
+      DPRINT("AtaXProcessCompletedRequest: Start the next request\n");
+      AtaXGetNextRequest(AtaXChannelFdoExtension, AtaXDevicePdoExtension);
+    }
+    else
+    {
+      DPRINT("AtaXProcessCompletedRequest: AtaXDevicePdoExtension->RequestTimeout - %x\n", AtaXDevicePdoExtension->RequestTimeout);
+      KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+    }
+  }
+  else
+  {
+      DPRINT1("AtaXProcessCompletedRequest: Freeze the queue\n");
+      Srb->SrbStatus |= SRB_STATUS_QUEUE_FROZEN;
+      AtaXDevicePdoExtension->Flags |= LUNEX_FROZEN_QUEUE;
+      
+      if ( Srb->ScsiStatus == SCSISTAT_CHECK_CONDITION &&
+         !(Srb->SrbStatus & SRB_STATUS_AUTOSENSE_VALID) &&
+         Srb->SenseInfoBuffer && Srb->SenseInfoBufferLength )
+      {
+        DPRINT("AtaXProcessCompletedRequest: we need a request sense\n");
+  
+        if ( AtaXDevicePdoExtension->Flags & LUNEX_BUSY )
+        {
+          DPRINT("AtaXProcessCompletedRequest: AtaXDevicePdoExtension->Flags & LUNEX_BUSY \n");
+          DPRINT("AtaXProcessCompletedRequest: Requeueing busy request to allow request sense\n");
+  
+          if ( !KeInsertByKeyDeviceQueue(&AtaXDevicePdoExtension->DeviceQueue,
+               &AtaXDevicePdoExtension->BusyRequest->Tail.Overlay.DeviceQueueEntry,
+               Srb->QueueSortKey) )
+          {
+            DPRINT("AtaXProcessCompletedRequest: We should never get here \n");
+            ASSERT(FALSE);
+  
+            KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+            IoCompleteRequest(Irp, IO_DISK_INCREMENT);
+
+            return;
+          }
+  
+          AtaXDevicePdoExtension->Flags &= ~(LUNEX_FULL_QUEUE | LUNEX_BUSY);
+        }
+  
+        KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+ASSERT(FALSE);
+        //AtaXSendRequestSense(AtaXChannelFdoExtension, Srb);
+        return;
+      }
+  
+      KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+  }
+
+  IoCompleteRequest(Irp, IO_DISK_INCREMENT);
+  DPRINT("AtaXProcessCompletedRequest: exit \n");
+}
+
 BOOLEAN
 AtaXSaveInterruptData(IN PVOID Context)
 {
@@ -1051,9 +1291,8 @@ AtaXDpc(
     if ( SrbInfo->CompletedRequests )
       SrbInfo->CompletedRequests = NULL;
 
-ASSERT(FALSE);
     // обработка завершенных запросов
-    //AtaXProcessCompletedRequest(AtaXChannelFdoExtension, SrbInfo, &NeedToStartIo);
+    AtaXProcessCompletedRequest(AtaXChannelFdoExtension, SrbInfo, &NeedToStartIo);
   }
 
   if ( NeedToStartIo )

@@ -296,6 +296,7 @@ typedef struct _PDO_DEVICE_EXTENSION {                    //// PDO расширение At
   LONG                     RequestTimeout;                 // Тайм-аут запроса
   ULONG                    AttemptCount;
   PIRP                     PendingRequest;
+  PIRP                     BusyRequest;
 
   // Очередь IRPs для устройства
   KDEVICE_QUEUE            DeviceQueue;                    // Структура для поддержки очереди из IRPs
