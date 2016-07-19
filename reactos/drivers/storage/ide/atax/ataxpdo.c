@@ -346,3 +346,121 @@ ASSERT(FALSE);
   IoCompleteRequest(Irp, IO_NO_INCREMENT);
   return Status;
 }
+
+NTSTATUS
+AtaXDevicePdoDispatchPnp(
+    IN PDEVICE_OBJECT AtaXDevicePdo,
+    IN PIRP Irp)
+{
+  PIO_STACK_LOCATION    Stack;
+  ULONG                 MinorFunction;
+  PDEVICE_CAPABILITIES  DeviceCapabilities;
+  ULONG                 ix;
+  NTSTATUS              Status;
+  
+  Stack = IoGetCurrentIrpStackLocation(Irp);
+  MinorFunction = Stack->MinorFunction;
+
+  switch ( MinorFunction )
+  {
+    case IRP_MN_START_DEVICE:                 /* 0x00 */  //AtaXDevicePdoStartDevice
+      DPRINT("IRP_MJ_PNP / IRP_MN_START_DEVICE\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXDevicePdoStartDevice(AtaXDevicePdo, Irp);
+      break;
+
+    case IRP_MN_QUERY_REMOVE_DEVICE:          /* 0x01 */
+    case IRP_MN_QUERY_STOP_DEVICE:            /* 0x05 */  //AtaXDevicePdoQueryStopRemoveDevice
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_REMOVE(STOP)_DEVICE\n");
+      Irp->IoStatus.Status = 0;
+ASSERT(FALSE);
+      return 0;//AtaXDevicePdoQueryStopRemoveDevice(AtaXDevicePdo, Irp);
+
+    case IRP_MN_REMOVE_DEVICE:                /* 0x02 */
+    case IRP_MN_SURPRISE_REMOVAL:             /* 0x17 */  //AtaXDevicePdoRemoveDevice
+      DPRINT("IRP_MJ_PNP / IRP_MN_REMOVE_DEVICE\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXDevicePdoRemoveDevice(AtaXDevicePdo, Irp);
+      break;
+
+    case IRP_MN_STOP_DEVICE:                  /* 0x04 */  //AtaXDevicePdoStopDevice
+      DPRINT("IRP_MJ_PNP / IRP_MN_STOP_DEVICE\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXDevicePdoStopDevice(AtaXDevicePdo, Irp);
+      break;
+
+    case IRP_MN_CANCEL_REMOVE_DEVICE:         /* 0x03 */
+    case IRP_MN_CANCEL_STOP_DEVICE:           /* 0x06 */
+      DPRINT("IRP_MJ_PNP / IRP_MN_CANCEL_REMOVE(STOP)_DEVICE\n");
+      Irp->IoStatus.Status = 0;
+      break;
+
+    case IRP_MN_QUERY_DEVICE_RELATIONS:       /* 0x07 */  //AtaXDevicePdoQueryDeviceRelations
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_RELATIONS\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXDevicePdoQueryDeviceRelations(AtaXDevicePdo, Irp);
+      break;
+
+    case IRP_MN_QUERY_CAPABILITIES:           /* 0x09 */  //AtaXDevicePdoQueryCapabilities
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_CAPABILITIES\n");
+
+      DeviceCapabilities = (PDEVICE_CAPABILITIES)Stack->Parameters.DeviceCapabilities.Capabilities;
+
+      /* FIXME: capabilities can change with connected device */
+      DeviceCapabilities->LockSupported     = FALSE;
+      DeviceCapabilities->EjectSupported    = FALSE;
+      DeviceCapabilities->Removable         = TRUE;
+      DeviceCapabilities->DockDevice        = FALSE;
+      DeviceCapabilities->UniqueID          = FALSE;
+      DeviceCapabilities->SilentInstall     = FALSE;
+      DeviceCapabilities->RawDeviceOK       = FALSE;
+      DeviceCapabilities->SurpriseRemovalOK = TRUE;
+      DeviceCapabilities->HardwareDisabled  = FALSE;            /* FIXME */
+      //DeviceCapabilities->NoDisplayInUI   = FALSE;            /* FIXME */
+      DeviceCapabilities->DeviceState[0]    = PowerDeviceD0;    /* FIXME */
+
+      for (ix = 0; ix < PowerSystemMaximum; ix++)
+      	DeviceCapabilities->DeviceState[ix] = PowerDeviceD3;    /* FIXME */
+      //DeviceCapabilities->DeviceWake = PowerDeviceUndefined;  /* FIXME */
+
+      DeviceCapabilities->D1Latency = 0;                        /* FIXME */
+      DeviceCapabilities->D2Latency = 0;                        /* FIXME */
+      DeviceCapabilities->D3Latency = 0;                        /* FIXME */
+
+      Status = STATUS_SUCCESS;
+      break;
+
+    case IRP_MN_QUERY_DEVICE_TEXT:            /* 0x0C */  //AtaXDevicePdoQueryDeviceText
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_TEXT\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXDevicePdoQueryDeviceText(AtaXDevicePdo, Irp);
+      break;
+
+    case IRP_MN_QUERY_ID:                     /* 0x13 */  //AtaXDevicePdoQueryId
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_ID\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXDevicePdoQueryId(AtaXDevicePdo, Irp);
+      break;
+
+    case IRP_MN_QUERY_PNP_DEVICE_STATE:       /* 0x14 */  //AtaXDevicePdoQueryPnPDeviceState
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_PNP_DEVICE_STATE\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXDevicePdoQueryPnPDeviceState(AtaXDevicePdo, Irp);
+      break;
+
+    case IRP_MN_DEVICE_USAGE_NOTIFICATION:    /* 0x16 */  //AtaXDevicePdoUsageNotification
+      DPRINT("IRP_MJ_PNP / IRP_MN_DEVICE_USAGE_NOTIFICATION\n");
+ASSERT(FALSE);
+      Status = 0;//AtaXDevicePdoUsageNotification(AtaXDevicePdo, Irp);
+      break;
+
+    default:
+      DPRINT("IRP_MJ_PNP / Unknown minor function 0x%lx\n", MinorFunction);
+      IoCompleteRequest(Irp, IO_NO_INCREMENT);
+      return Irp->IoStatus.Status;
+  }
+
+  Irp->IoStatus.Status = Status;
+  IoCompleteRequest(Irp, IO_NO_INCREMENT);
+  return Status;
+}

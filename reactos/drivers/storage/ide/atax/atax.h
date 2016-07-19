@@ -383,6 +383,11 @@ AtaXDevicePdoDispatchScsi(
     IN PDEVICE_OBJECT AtaXDevicePdo,
     IN PIRP Irp);
 
+NTSTATUS
+AtaXDevicePdoDispatchPnp(
+    IN PDEVICE_OBJECT AtaXDevicePdo,
+    IN PIRP Irp);
+
 //
 // Определения макросов
 //

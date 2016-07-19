@@ -858,8 +858,7 @@ AtaXDispatchPnp(
   if ( ((PCOMMON_ATAX_DEVICE_EXTENSION)DeviceObject->DeviceExtension)->IsFDO )
     return AtaXChannelFdoDispatchPnp(DeviceObject, Irp);
   else
-ASSERT(FALSE);
-    return 0;//AtaXDevicePdoDispatchPnp(DeviceObject, Irp);
+    return AtaXDevicePdoDispatchPnp(DeviceObject, Irp);
 }
 
 DRIVER_UNLOAD AtaXUnload;
