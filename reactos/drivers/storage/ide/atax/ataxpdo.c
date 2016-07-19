@@ -585,11 +585,31 @@ ASSERT(FALSE);
 
         case SCSIOP_MODE_SENSE:         /* 0x1A */
           DPRINT("IRP_MJ_SCSI / SRB_FUNCTION_EXECUTE_SCSI / SCSIOP_MODE_SENSE FIXME AhciModeSense\n");
-ASSERT(FALSE);
+          if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE ) //if ATAPI
+          {
+            break;// --> IoStartPacket
+          }
+          else if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_DEVICE_PRESENT ) //if ATA
+          {
+            //if ( AtaXChannelFdoExtension->AhciInterface )
+            //  Status = AhciModeSense(AtaXDevicePdoExtension, Srb);
+            //else
+              Status = AtaModeSense(AtaXDevicePdoExtension, Srb);
+  
+            DPRINT(" AtaXDevicePdoDispatchScsi: return - %p\n", Status);
+            return Status;
+          }
+          else //Error
+          {
+            DPRINT(" AtaXDevicePdoDispatchScsi: Error. DeviceFlags - %p\n", AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId]);
+            ASSERT(FALSE);
+            break;  // --> IoStartPacket
+          }
 
         case SCSIOP_MODE_SENSE10:       /* 0x5A */
           DPRINT("IRP_MJ_SCSI / SRB_FUNCTION_EXECUTE_SCSI / SCSIOP_MODE_SENSE10 (PIO mode) \n");
-ASSERT(FALSE);
+          Srb->SrbFlags &= ~SRB_FLAGS_USE_DMA;  // PIO mode
+          break;// --> IoStartPacket
 
         case SCSIOP_READ_CAPACITY:      /* 0x25 */
           DPRINT("IRP_MJ_SCSI / SRB_FUNCTION_EXECUTE_SCSI / SCSIOP_READ_CAPACITY\n");
