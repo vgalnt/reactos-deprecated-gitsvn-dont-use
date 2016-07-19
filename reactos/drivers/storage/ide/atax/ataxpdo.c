@@ -1135,6 +1135,31 @@ AtaXDevicePdoStartDevice(
 }
 
 NTSTATUS
+AtaXDevicePdoQueryPnPDeviceState(
+    IN PDEVICE_OBJECT AtaXDevicePdo,
+    IN PIRP Irp)
+{
+  PPDO_DEVICE_EXTENSION  AtaXDevicePdoExtension;
+  NTSTATUS               Status = STATUS_SUCCESS;
+
+  DPRINT("AtaXDevicePdoQueryPnPDeviceState (%p %p)\n", AtaXDevicePdo, Irp);
+
+  AtaXDevicePdoExtension = AtaXDevicePdo->DeviceExtension;
+  if ( AtaXDevicePdoExtension )
+  {
+    if ( AtaXDevicePdoExtension->DeviceNotDisableable )
+      Irp->IoStatus.Information |= PNP_DEVICE_NOT_DISABLEABLE; //0x20;
+  }
+  else
+  {
+    Status = STATUS_DEVICE_DOES_NOT_EXIST;
+  }
+
+  DPRINT(" AtaXDevicePdoQueryPnPDeviceState return - %p \n", Status);
+  return Status;
+}
+
+NTSTATUS
 AtaXDevicePdoDispatchPnp(
     IN PDEVICE_OBJECT AtaXDevicePdo,
     IN PIRP Irp)
@@ -1228,8 +1253,7 @@ ASSERT(FALSE);
 
     case IRP_MN_QUERY_PNP_DEVICE_STATE:       /* 0x14 */  //AtaXDevicePdoQueryPnPDeviceState
       DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_PNP_DEVICE_STATE\n");
-ASSERT(FALSE);
-      Status = 0;//AtaXDevicePdoQueryPnPDeviceState(AtaXDevicePdo, Irp);
+      Status = AtaXDevicePdoQueryPnPDeviceState(AtaXDevicePdo, Irp);
       break;
 
     case IRP_MN_DEVICE_USAGE_NOTIFICATION:    /* 0x16 */  //AtaXDevicePdoUsageNotification
