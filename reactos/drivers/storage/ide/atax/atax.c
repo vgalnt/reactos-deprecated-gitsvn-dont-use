@@ -293,8 +293,183 @@ AtapiSendCommand(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
     IN PSCSI_REQUEST_BLOCK Srb)
 {
+  PATAX_REGISTERS_1  AtaXRegisters1;
+  PATAX_REGISTERS_2  AtaXRegisters2;
+  UCHAR              ByteCountLow;
+  UCHAR              ByteCountHigh;
+  ULONG              Flags;
+  UCHAR              StatusByte;
+  ULONG              ix;
+  ULONG              DeviceNumber;
+
+  DPRINT("AtapiSendCommand: Command %x to device %d\n", Srb->Cdb[0], Srb->TargetId);
+  
+  ASSERT(AtaXChannelFdoExtension);
+  AtaXRegisters1 = &AtaXChannelFdoExtension->BaseIoAddress1;
+  AtaXRegisters2 = &AtaXChannelFdoExtension->BaseIoAddress2;
+
+  Flags = AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId];
+  if ( !(Flags & DFLAGS_ATAPI_DEVICE) )
+    return SRB_STATUS_SELECTION_TIMEOUT;  //не ATAPI устройство
+
+  DeviceNumber = Srb->TargetId & 1;
+
+  // Выбираем устройство
+  WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect, (UCHAR)((DeviceNumber << 4) | IDE_DRIVE_SELECT));
+
+  // Считываем альтернативный регистр состояния
+  StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+  DPRINT("AtapiSendCommand: Entered with StatusByte - %x\n", StatusByte);
+
+  if ( StatusByte & IDE_STATUS_BUSY )
+  {
+    DPRINT("AtapiSendCommand: Device busy (%x)\n", StatusByte);
+    return SRB_STATUS_BUSY;
+  }
+
+  if ( StatusByte & IDE_STATUS_ERROR )
+  {
+    if ( Srb->Cdb[0] != SCSIOP_REQUEST_SENSE )
+    {
+      DPRINT("AtapiSendCommand: Error on entry: (%x) \n", StatusByte);
+      return AtaXMapError(AtaXChannelFdoExtension, Srb);
+    }
+  }
+
+  if ( IS_RDP(Srb->Cdb[0]) )
+  {
+    AtaXChannelFdoExtension->RDP = TRUE;
+    DPRINT("AtapiSendCommand: %x mapped as DSC restrictive\n", Srb->Cdb[0]);
+  }
+  else
+  {
+    AtaXChannelFdoExtension->RDP = FALSE;
+  }
+
+  if ( StatusByte & IDE_STATUS_DRQ )
+  {
+    DPRINT("AtapiSendCommand: Entered with status (%x). Attempting to recover.\n", StatusByte);
+
+    for ( ix = 0; ix < 0x10000; ix++ )
+    {
+      // Считываем альтернативный регистр состояния
+      StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+
+      if ( StatusByte & IDE_STATUS_DRQ )
+        READ_PORT_USHORT(AtaXRegisters1->Data);
+      else
+        break;
+    }
+
+    if ( ix == 0x10000 )
+    {
+      DPRINT("AtapiSendCommand: DRQ still asserted.Status (%x)\n", StatusByte);
+      AtaXSoftReset(AtaXRegisters1, AtaXRegisters2, DeviceNumber);
+
+      DPRINT("AtapiSendCommand: Issued soft reset to Atapi device. \n");
+      // инициализируем Atapi устройство
+      AtaXIssueIdentify(AtaXChannelFdoExtension,
+                        &AtaXChannelFdoExtension->FullIdentifyData[DeviceNumber],
+                        DeviceNumber,
+                        IDE_COMMAND_ATAPI_IDENTIFY);
+
+      // Сообщаем драйверу, что шина была сброшена
+      AtaXNotification(ResetDetected, AtaXChannelFdoExtension, 0);
+
+      // Сбрасываем поля аппаратного расширения
+      AtaXChannelFdoExtension->ExpectingInterrupt = FALSE;
+      AtaXChannelFdoExtension->RDP                = FALSE;
+
+      return SRB_STATUS_BUS_RESET;
+    }
+  }
+
+  // Преобразуем SCSI-команды в ATAPI команды
+  switch ( Srb->Cdb[0] )
+  {
+    case SCSIOP_MODE_SENSE:
+    case SCSIOP_MODE_SELECT:
+    case SCSIOP_FORMAT_UNIT:
+      if ( !(Flags & DFLAGS_TAPE_DEVICE) )
+        Scsi2Atapi(Srb);
+    break;
+  }
+
+  AtaXChannelFdoExtension->DataBuffer = (PUSHORT)Srb->DataBuffer;   // указатель буфера данных
+  AtaXChannelFdoExtension->WordsLeft = Srb->DataTransferLength / 2; // осталось передать слов
+
+  AtaXWaitOnBusy(AtaXRegisters2);
+  StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+
+  // устанавливаем количество байт пересылки в соотвктствующие регистры
+  ByteCountLow = (UCHAR)(Srb->DataTransferLength & 0xFF);
+  ByteCountHigh = (UCHAR)(Srb->DataTransferLength >> 8);
+
+  if ( Srb->DataTransferLength >= 0x10000 )
+    ByteCountLow = ByteCountHigh = 0xFF;
+
+  WRITE_PORT_UCHAR(AtaXRegisters1->ByteCountLow, ByteCountLow);
+  WRITE_PORT_UCHAR(AtaXRegisters1->ByteCountHigh, ByteCountHigh);
+  WRITE_PORT_UCHAR(AtaXRegisters1->Features, (Srb->SrbFlags & SRB_FLAGS_USE_DMA) != 0);
+
+  // отправляем команду IDE_COMMAND_ATAPI_PACKET (0xA0)
+  WRITE_PORT_UCHAR(AtaXRegisters1->Command, IDE_COMMAND_ATAPI_PACKET);
+
+  if ( Flags & DFLAGS_INT_DRQ )
+  {
+    // это устройство выдает прерывание, когда готово получать пакет
+    DPRINT("AtapiSendCommand: Wait for interrupt to send packet. Status (%x)\n", StatusByte);
+    AtaXChannelFdoExtension->ExpectingInterrupt = TRUE;
+    return SRB_STATUS_PENDING;
+  }
+  else
+  {
+    // ждем DRQ
+    AtaXWaitOnBusy(AtaXRegisters2);
+    AtaXWaitForDrq(AtaXRegisters2);
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+
+    if ( !(StatusByte & IDE_STATUS_DRQ) )
+    {
+      DPRINT("AtapiSendCommand: DRQ never asserted (%x)\n", StatusByte);
+      return SRB_STATUS_ERROR;
+    }
+  }
+
+  // считываем регистр состояния, тем самым сбрасываем прерывание
+  StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+  AtaXWaitOnBusy(AtaXRegisters2);
+
+if ( TRUE )
+{
+  UCHAR ix;
+
+  for ( ix = 0; ix < Srb->CdbLength; ix++ )
+  {
+    DPRINT("AtapiSendCommand: Srb->Cdb[%d] - %x\n", ix, *((PUCHAR)Srb->Cdb + ix));
+  }
+}
+
+  // отправляем CDB устройству
+  WRITE_PORT_BUFFER_USHORT(AtaXRegisters1->Data, (PUSHORT)Srb->Cdb, 6);
+
+  // будем ждать запланированное прерывание
+  AtaXChannelFdoExtension->ExpectingInterrupt = TRUE;
+
+  if ( Srb->SrbFlags & SRB_FLAGS_USE_DMA )
+  {
+    //PBUS_MASTER_INTERFACE BusMasterInterface;
+
+    DPRINT("AtapiSendCommand: SRB_FLAGS_USE_DMA\n");
+
+    //BusMasterInterface = &AtaXChannelFdoExtension->BusMasterInterface;
+    AtaXChannelFdoExtension->BusMaster = TRUE;
 ASSERT(FALSE);
-  return 0;
+    //BusMasterInterface->BusMasterStart(BusMasterInterface->ChannelPdoExtension);
+  }
+
+  DPRINT(" AtapiSendCommand: return - %x\n", SRB_STATUS_PENDING);
+  return SRB_STATUS_PENDING;
 }
 
 NTSTATUS

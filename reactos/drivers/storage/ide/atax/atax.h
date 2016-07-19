@@ -326,10 +326,29 @@ AddChannelFdo(
 BOOLEAN
 AtaXDetectDevices(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension);
 
+BOOLEAN
+AtaXIssueIdentify(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PIDENTIFY_DATA Identify,
+    IN ULONG DeviceNumber,
+    IN UCHAR Command);
+
 // ataxpdo.c
 NTSTATUS
 AtaXDevicePdoDispatchScsi(
     IN PDEVICE_OBJECT AtaXDevicePdo,
     IN PIRP Irp);
+
+//
+// Определения макросов
+//
+#define IS_RDP(OperationCode)\
+    ((OperationCode == SCSIOP_ERASE)||\
+    (OperationCode == SCSIOP_LOAD_UNLOAD)||\
+    (OperationCode == SCSIOP_LOCATE)||\
+    (OperationCode == SCSIOP_REWIND) ||\
+    (OperationCode == SCSIOP_SPACE)||\
+    (OperationCode == SCSIOP_SEEK)||\
+    (OperationCode == SCSIOP_WRITE_FILEMARKS))
 
 #endif /* _ATAX_PCH_ */
