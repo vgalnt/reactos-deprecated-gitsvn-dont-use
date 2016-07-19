@@ -72,6 +72,278 @@ AtaXQueueAddIrp(
   return Result;
 }
 
+ULONG
+AtaXGetFieldLength(
+    IN PUCHAR Name,
+    IN ULONG MaxLength)
+{
+  ULONG ix;
+  ULONG LastCharacterPosition = 0;
+  
+  // scan the field and return last positon which contains a valid character
+  for( ix = 0; ix < MaxLength; ix++ )
+  {
+    // trim white spaces from field
+    if ( Name[ix] != ' ' )
+      LastCharacterPosition = ix;
+  }
+
+  // convert from zero based index to length
+  return LastCharacterPosition + 1;
+}
+
+NTSTATUS
+AtaXStorageQueryProperty(
+    IN PPDO_DEVICE_EXTENSION AtaXDevicePdoExtension,
+    IN PIRP Irp)
+{
+  NTSTATUS                     Status;
+  PFDO_CHANNEL_EXTENSION       AtaXChannelFdoExtension;
+  PIDENTIFY_DATA               IdentifyData;
+  PINQUIRYDATA                 InquiryData;
+  PSTORAGE_PROPERTY_QUERY      PropertyQuery;
+  PSTORAGE_DESCRIPTOR_HEADER   DescriptorHeader;
+  PSTORAGE_ADAPTER_DESCRIPTOR  AdapterDescriptor;
+  PSTORAGE_DEVICE_DESCRIPTOR   DeviceDescriptor;
+  ULONG                        FieldLengthProduct;
+  ULONG                        FieldLengthRevision;
+  ULONG                        FieldLengthSerialNumber;
+  ULONG                        TotalLength;
+  ULONG                        TargetId;
+  PUCHAR                       Buffer;
+  ULONG                        ix;
+  PIO_STACK_LOCATION           IoStack = IoGetCurrentIrpStackLocation(Irp);
+
+  DPRINT("AtaXStorageQueryProperty (%p %p)\n", AtaXDevicePdoExtension, Irp);
+
+  ASSERT(IoStack->Parameters.DeviceIoControl.InputBufferLength >= sizeof(STORAGE_PROPERTY_QUERY));
+  ASSERT(Irp->AssociatedIrp.SystemBuffer);
+
+  PropertyQuery = (PSTORAGE_PROPERTY_QUERY)Irp->AssociatedIrp.SystemBuffer;
+
+  // поддерживаются только DeviceProperty и AdapterProperty
+  if (PropertyQuery->PropertyId != StorageDeviceProperty &&
+      PropertyQuery->PropertyId != StorageAdapterProperty)
+  {
+    Status = STATUS_NOT_IMPLEMENTED;
+    DPRINT(" AtaXStorageQueryProperty return - %p \n", Status);
+    return Status;
+  }
+
+  // поддерживаются только StandardQuery и ExistsQuery
+  if ( PropertyQuery->QueryType == PropertyExistsQuery )
+  {
+    Status = STATUS_SUCCESS;
+    DPRINT(" AtaXStorageQueryProperty return - %p \n", Status);
+    return Status;
+  }
+
+  if ( PropertyQuery->QueryType != PropertyStandardQuery )
+  {
+    Status = STATUS_NOT_IMPLEMENTED;
+    DPRINT(" AtaXStorageQueryProperty return - %p \n", Status);
+    return Status;
+  }
+
+  if ( PropertyQuery->PropertyId == StorageDeviceProperty )
+  {
+    // если PropertyQuery->PropertyId == StorageDeviceProperty
+    DPRINT("AtaXStorageQueryProperty: PropertyQuery->PropertyId == StorageDeviceProperty\n");
+    DPRINT("AtaXStorageQueryProperty: StorageDeviceProperty OutputBufferLength - %x\n", IoStack->Parameters.DeviceIoControl.OutputBufferLength);
+
+    AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXDevicePdoExtension->AtaXChannelFdoExtension;
+    ASSERT(AtaXChannelFdoExtension);
+    ASSERT(AtaXChannelFdoExtension->CommonExtension.IsFDO);
+
+    TargetId = AtaXDevicePdoExtension->TargetId;
+
+    IdentifyData = &AtaXChannelFdoExtension->FullIdentifyData[TargetId];
+    InquiryData  = &AtaXChannelFdoExtension->InquiryData[TargetId];
+
+    // подсчитываем размер полей
+
+    if ( AtaXChannelFdoExtension->DeviceFlags[TargetId] & DFLAGS_ATAPI_DEVICE )
+    {
+      //FieldLengthVendor     = AtaXGetFieldLength(InquiryData->VendorId, 8);
+      FieldLengthProduct      = AtaXGetFieldLength(InquiryData->ProductId, 16);
+      FieldLengthRevision     = AtaXGetFieldLength(InquiryData->ProductRevisionLevel, 4);
+      FieldLengthSerialNumber = AtaXGetFieldLength(IdentifyData->SerialNumber, 20);
+    }
+    else if ( AtaXChannelFdoExtension->DeviceFlags[TargetId] & DFLAGS_DEVICE_PRESENT )
+    {
+      //FieldLengthVendor     = AtaXGetFieldLength(InquiryData->VendorId, 0);
+      FieldLengthProduct      = AtaXGetFieldLength(IdentifyData->ModelNumber, 16);
+      FieldLengthRevision     = AtaXGetFieldLength(IdentifyData->FirmwareRevision, 4);
+      FieldLengthSerialNumber = AtaXGetFieldLength(IdentifyData->SerialNumber, 20);
+    }
+
+    //DPRINT("AtaXStorageQueryProperty: FieldLengthVendor       - %x\n", FieldLengthVendor);
+    DPRINT("AtaXStorageQueryProperty: FieldLengthProduct      - %x\n", FieldLengthProduct);
+    DPRINT("AtaXStorageQueryProperty: FieldLengthRevision     - %x\n", FieldLengthRevision);
+    DPRINT("AtaXStorageQueryProperty: FieldLengthSerialNumber - %x\n", FieldLengthSerialNumber);
+
+    // sizeof(STORAGE_DEVICE_DESCRIPTOR) = 0x28, INQUIRYDATABUFFERSIZE = 0x24
+    TotalLength = sizeof(STORAGE_DEVICE_DESCRIPTOR) + 
+                  INQUIRYDATABUFFERSIZE   - 4 +  // UCHAR RawDeviceProperties[1] (+4) (занимает 4 байта, а не 1 (STORAGE_DEVICE_DESCRIPTOR))
+                  //FieldLengthVendor     + 1 +  // не используется в ATA/ATAPI
+                  FieldLengthProduct      + 1 +  // +1 - завершающий "нулевой" байт
+                  FieldLengthRevision     + 1 +
+                  FieldLengthSerialNumber + 1;
+    DPRINT("AtaXStorageQueryProperty: TotalLength - %x\n", TotalLength);
+
+    if ( IoStack->Parameters.DeviceIoControl.OutputBufferLength < sizeof(STORAGE_DEVICE_DESCRIPTOR) )
+    {
+      // запрос размера
+      DescriptorHeader = (PSTORAGE_DESCRIPTOR_HEADER)Irp->AssociatedIrp.SystemBuffer;
+      ASSERT(IoStack->Parameters.DeviceIoControl.OutputBufferLength >= sizeof(STORAGE_DESCRIPTOR_HEADER));
+
+      // заполняем поля
+      DescriptorHeader->Version = sizeof(STORAGE_DEVICE_DESCRIPTOR);
+      DescriptorHeader->Size = TotalLength;
+
+      Irp->IoStatus.Information = sizeof(STORAGE_DESCRIPTOR_HEADER);
+      DPRINT("AtaXStorageQueryProperty: Irp->IoStatus.Information - %x\n", Irp->IoStatus.Information );
+      Status = STATUS_SUCCESS;
+      DPRINT(" AtaXStorageQueryProperty return - %p \n", Status);
+      return Status;
+    }
+
+    // заполняем идентификационные поля
+    // копируем данные из IDENTIFY в INQUIRY 
+
+    if ( AtaXChannelFdoExtension->DeviceFlags[TargetId] & DFLAGS_DEVICE_PRESENT )
+    {
+      RtlZeroMemory(InquiryData, sizeof(INQUIRYDATA));
+
+      InquiryData->DeviceType = DIRECT_ACCESS_DEVICE;
+
+      if ( AtaXChannelFdoExtension->DeviceFlags[TargetId] & DFLAGS_REMOVABLE_DRIVE )
+        InquiryData->RemovableMedia = 1;
+
+      for ( ix = 0; ix < FieldLengthProduct; ix += 2 )
+      {
+        InquiryData->ProductId[ix]     = IdentifyData->ModelNumber[ix + 1];
+        InquiryData->ProductId[ix + 1] = IdentifyData->ModelNumber[ix];
+      }
+      for ( ix = 0; ix < FieldLengthRevision; ix += 2 )
+      {
+        InquiryData->ProductRevisionLevel[ix]     = IdentifyData->FirmwareRevision[ix + 1];
+        InquiryData->ProductRevisionLevel[ix + 1] = IdentifyData->FirmwareRevision[ix];
+      }
+      for ( ix = 0; ix < FieldLengthSerialNumber; ix += 2 )
+      {
+        InquiryData->VendorSpecific[ix]     = IdentifyData->SerialNumber[ix + 1];
+        InquiryData->VendorSpecific[ix + 1] = IdentifyData->SerialNumber[ix];
+      }
+    }
+
+    // берем указатель на дескриптор устройства в IRP
+    DeviceDescriptor = (PSTORAGE_DEVICE_DESCRIPTOR)Irp->AssociatedIrp.SystemBuffer;
+    RtlZeroMemory(DeviceDescriptor, TotalLength);
+
+    // заполним дескриптор
+    DeviceDescriptor->Version               = sizeof(STORAGE_DEVICE_DESCRIPTOR); //TotalLength;
+    DeviceDescriptor->Size                  = TotalLength;
+    DeviceDescriptor->DeviceType            = InquiryData->DeviceType;
+    DeviceDescriptor->DeviceTypeModifier    = InquiryData->DeviceTypeModifier;
+    DeviceDescriptor->RemovableMedia        = InquiryData->RemovableMedia & 1 ? TRUE : FALSE;
+    DeviceDescriptor->CommandQueueing       = FALSE;
+    DeviceDescriptor->VendorIdOffset        = 0;
+    DeviceDescriptor->ProductIdOffset       = sizeof(STORAGE_DEVICE_DESCRIPTOR) + INQUIRYDATABUFFERSIZE - 4;
+    DeviceDescriptor->ProductRevisionOffset = DeviceDescriptor->ProductIdOffset + FieldLengthProduct + 1;
+    DeviceDescriptor->SerialNumberOffset    = DeviceDescriptor->ProductRevisionOffset + FieldLengthRevision + 1;
+    DeviceDescriptor->RawPropertiesLength   = INQUIRYDATABUFFERSIZE;
+
+   if ( AtaXChannelFdoExtension->DeviceFlags[TargetId] & DFLAGS_DEVICE_PRESENT )
+     DeviceDescriptor->BusType              = BusTypeAta;
+   if ( AtaXChannelFdoExtension->DeviceFlags[TargetId] & DFLAGS_ATAPI_DEVICE )
+     DeviceDescriptor->BusType              = BusTypeAtapi;
+
+    // копируем дескрипторы
+    Buffer = (PUCHAR)((ULONG_PTR)DeviceDescriptor + DeviceDescriptor->ProductIdOffset);
+
+    // копируем vendor
+    //RtlCopyMemory(Buffer, InquiryData->VendorId, FieldLengthVendor);
+    //Buffer[FieldLengthVendor] = '\0';
+    //Buffer += FieldLengthVendor + 1;
+
+    // копируем product
+    RtlCopyMemory(Buffer, InquiryData->ProductId, FieldLengthProduct);
+    Buffer[FieldLengthProduct] = '\0';
+    Buffer += FieldLengthProduct + 1;
+
+    // копируем revision
+    RtlCopyMemory(Buffer, InquiryData->ProductRevisionLevel, FieldLengthRevision);
+    Buffer[FieldLengthRevision] = '\0';
+    Buffer += FieldLengthRevision + 1;
+
+    // копируем serial number
+    RtlCopyMemory(Buffer, InquiryData->VendorSpecific, FieldLengthSerialNumber);
+    Buffer[FieldLengthSerialNumber] = '\0';
+    //Buffer += FieldLengthSerialNumber + 1;
+
+    //DPRINT("Vendor %s\n", (LPCSTR)((ULONG_PTR)DeviceDescriptor + DeviceDescriptor->VendorIdOffset));
+    DPRINT("Product %s\n",  (LPCSTR)((ULONG_PTR)DeviceDescriptor + DeviceDescriptor->ProductIdOffset));
+    DPRINT("Revision %s\n", (LPCSTR)((ULONG_PTR)DeviceDescriptor + DeviceDescriptor->ProductRevisionOffset));
+    DPRINT("Serial %s\n",   (LPCSTR)((ULONG_PTR)DeviceDescriptor + DeviceDescriptor->SerialNumberOffset));
+
+    // готово
+    Irp->IoStatus.Information = TotalLength;
+    DPRINT("return STATUS_SUCCESS\n");
+    return STATUS_SUCCESS;
+
+  }
+  else
+  {
+    // если PropertyQuery->PropertyId != StorageDeviceProperty (StorageAdapterProperty)
+
+    ULONG  SizeAdapterDescriptor = sizeof(STORAGE_ADAPTER_DESCRIPTOR);
+
+    DPRINT("AtaXStorageQueryProperty: PropertyQuery->PropertyId == StorageAdapterProperty\n");
+    DPRINT("AtaXStorageQueryProperty: StorageAdapterProperty OutputBufferLength - %lu\n", IoStack->Parameters.DeviceIoControl.OutputBufferLength);
+
+    if (IoStack->Parameters.DeviceIoControl.OutputBufferLength < SizeAdapterDescriptor)
+    {
+      // запрос размера
+      DescriptorHeader = (PSTORAGE_DESCRIPTOR_HEADER)Irp->AssociatedIrp.SystemBuffer;
+      ASSERT(IoStack->Parameters.DeviceIoControl.OutputBufferLength >= sizeof(STORAGE_DESCRIPTOR_HEADER));
+
+      // заполняем поля
+      DescriptorHeader->Version = SizeAdapterDescriptor;
+      DescriptorHeader->Size    = SizeAdapterDescriptor;
+
+      Irp->IoStatus.Information = sizeof(STORAGE_DESCRIPTOR_HEADER);
+      Status = STATUS_SUCCESS;
+      DPRINT(" AtaXStorageQueryProperty return - %p \n", Status);
+      return Status;
+    }
+
+    // берем указатель на дескриптор адаптера в IRP
+    AdapterDescriptor = (PSTORAGE_ADAPTER_DESCRIPTOR)Irp->AssociatedIrp.SystemBuffer;
+
+    // заполним дескриптор
+    AdapterDescriptor->Version               = SizeAdapterDescriptor;
+    AdapterDescriptor->Size                  = SizeAdapterDescriptor;
+    AdapterDescriptor->MaximumTransferLength = 0x20000;      //FIXME compute some sane value
+    AdapterDescriptor->MaximumPhysicalPages  = MAXULONG;     //FIXME compute some sane value
+    AdapterDescriptor->AlignmentMask         = 1;
+    AdapterDescriptor->AdapterUsesPio        = TRUE;
+    AdapterDescriptor->AdapterScansDown      = FALSE;
+    AdapterDescriptor->CommandQueueing       = FALSE;
+    AdapterDescriptor->AcceleratedTransfer   = FALSE;
+    AdapterDescriptor->BusType               = BusTypeAta;
+    AdapterDescriptor->BusMajorVersion       = 1;           //FIXME verify
+    AdapterDescriptor->BusMinorVersion       = 0;           //FIXME
+
+    // размер ставим в IoStatus
+    Irp->IoStatus.Information = SizeAdapterDescriptor;
+    Status = STATUS_SUCCESS;
+  }
+
+  DPRINT(" AtaXStorageQueryProperty return - %p \n", Status);
+  return Status;
+}
+
 NTSTATUS
 AtaXDevicePdoDeviceControl(
     IN PDEVICE_OBJECT AtaXDevicePdo,
@@ -107,8 +379,7 @@ AtaXDevicePdoDeviceControl(
   {
     case IOCTL_STORAGE_QUERY_PROPERTY:                 /* 0x2d1400 */
       DPRINT("IRP_MJ_DEVICE_CONTROL / IOCTL_STORAGE_QUERY_PROPERTY\n");
-ASSERT(FALSE);
-      Status = 0;//AtaXStorageQueryProperty(AtaXDevicePdoExtension, Irp);
+      Status = AtaXStorageQueryProperty(AtaXDevicePdoExtension, Irp);
       break;
 
     case IOCTL_SCSI_GET_INQUIRY_DATA:                  /* 0x04100C */
