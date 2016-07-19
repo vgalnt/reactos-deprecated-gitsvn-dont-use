@@ -307,6 +307,13 @@ typedef struct _PDO_DEVICE_EXTENSION {                    //// PDO расширение At
 
 } PDO_DEVICE_EXTENSION, *PPDO_DEVICE_EXTENSION; 
 
+typedef struct _ATAX_SAVE_INTERRUPT {
+
+  PATAX_INTERRUPT_DATA    InterruptData;
+  PFDO_CHANNEL_EXTENSION  DeviceExtension;
+
+} ATAX_SAVE_INTERRUPT, *PATAX_SAVE_INTERRUPT;
+
 //
 // Определения функций
 //
@@ -336,6 +343,11 @@ VOID
 AtaXNotification(
     IN SCSI_NOTIFICATION_TYPE NotificationType,
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension, ...);
+
+VOID NTAPI
+AtaXStartIo(
+    IN PDEVICE_OBJECT AtaXChannelFdo,
+    IN PIRP Irp);
 
 // ataxfdo.c
 NTSTATUS

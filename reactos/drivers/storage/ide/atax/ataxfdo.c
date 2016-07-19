@@ -891,7 +891,117 @@ AtaXDpc(
     IN PVOID SystemArgument1,
     IN PVOID SystemArgument2)
 {
+  PFDO_CHANNEL_EXTENSION    AtaXChannelFdoExtension;
+  ATAX_INTERRUPT_DATA       InterruptData;
+  PSCSI_REQUEST_BLOCK_INFO  SrbInfo;
+  ATAX_SAVE_INTERRUPT       Context;
+  BOOLEAN                   NeedToStartIo;
+
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXChannelFdo->DeviceExtension;
+
+  KeAcquireSpinLockAtDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+  RtlZeroMemory(&InterruptData, sizeof(ATAX_INTERRUPT_DATA));
+
+  Context.InterruptData = &InterruptData;
+  Context.DeviceExtension = AtaXChannelFdoExtension;
+
+  if ( !KeSynchronizeExecution(AtaXChannelFdoExtension->InterruptObject,
+                              (PKSYNCHRONIZE_ROUTINE)AtaXSaveInterruptData,
+                              &Context) )
+  {
+    KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+    DPRINT("AtaXDpc return\n");
+    return;
+  }
+
+  if ( InterruptData.CompletedRequests )
+  {
+    PSCSI_REQUEST_BLOCK    Srb;
+    PBUS_MASTER_INTERFACE  BusMasterInterface;
+
+    Srb = InterruptData.CompletedRequests->Srb;
+    if ( Srb->SrbFlags & 0xC0 )
+    {
+      BusMasterInterface = &AtaXChannelFdoExtension->BusMasterInterface;
+      DPRINT("AtaXDpc:  BusMasterInterface - %p\n", BusMasterInterface);
+      if ( Srb->SrbFlags & SRB_FLAGS_USE_DMA )
+        ASSERT(FALSE);//BusMasterInterface->BusMasterComplete(BusMasterInterface->ChannelPdoExtension);
+    }
+  }
+
+  DPRINT("AtaXDpc:  InterruptData.Flags - %x \n", InterruptData.Flags);
+
+  if ( InterruptData.Flags & ATAX_FLUSH_ADAPTERS )
+    ASSERT(FALSE);      // TODO: Implement
+
+  if ( InterruptData.Flags & ATAX_MAP_TRANSFER )
+    ASSERT(FALSE);      // TODO: Implement
+
+  if ( InterruptData.Flags & ATAX_TIMER_NEEDED )
+    ASSERT(FALSE);      // TODO: Implement
+
+  DPRINT("AtaXDpc: AtaXChannelFdoExtension->Flags - %p \n", AtaXChannelFdoExtension->Flags);
+
+  // если готовность к следующему запросу
+  if ( InterruptData.Flags & ATAX_NEXT_REQUEST_READY )
+  {
+    // проверка на двойной запрос
+    if ( (AtaXChannelFdoExtension->Flags & (ATAX_DEVICE_BUSY | ATAX_DISCONNECT_ALLOWED))
+                                        == (ATAX_DEVICE_BUSY | ATAX_DISCONNECT_ALLOWED) )
+    {
+      DPRINT("AtaXDpc: Clear busy flag set by AtaXStartPacket()\n");
+      AtaXChannelFdoExtension->Flags &= ~ATAX_DEVICE_BUSY;
+  
+      // готовы к следующему пакету, а также нет сброса?
+      if ( !(InterruptData.Flags & ATAX_RESET) )
+        AtaXChannelFdoExtension->TimerCount = -1;
+    }
+    else
+    {
+      AtaXChannelFdoExtension->Flags &= ~ATAX_DEVICE_BUSY;
+      DPRINT("AtaXDpc: Not busy, but not ready for the next request\n");
+      InterruptData.Flags &= ~ATAX_NEXT_REQUEST_READY;
+    }
+  }
+
+  if ( InterruptData.Flags & ATAX_RESET_REPORTED ) // сброс?
+    AtaXChannelFdoExtension->TimerCount = 4;
+
+  KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+
+  // если готовы для следующего пакета, запускаем его
+  if ( InterruptData.Flags & ATAX_NEXT_REQUEST_READY )
+    IoStartNextPacket(AtaXChannelFdoExtension->CommonExtension.SelfDevice, FALSE);
+
+  NeedToStartIo = FALSE;
+
+  DPRINT("AtaXDpc: InterruptData.CompletedRequests - %p\n", InterruptData.CompletedRequests);
+
+  // цикл для списка завершенных запросов
+  while ( InterruptData.CompletedRequests )
+  {
+    SrbInfo = InterruptData.CompletedRequests;
+    DPRINT("AtaXDpc: SrbInfo->CompletedRequests - %p\n", SrbInfo->CompletedRequests);
+    InterruptData.CompletedRequests = SrbInfo->CompletedRequests;
+
+    if ( SrbInfo->CompletedRequests )
+      SrbInfo->CompletedRequests = NULL;
+
 ASSERT(FALSE);
+    // обработка завершенных запросов
+    //AtaXProcessCompletedRequest(AtaXChannelFdoExtension, SrbInfo, &NeedToStartIo);
+  }
+
+  if ( NeedToStartIo )
+  {
+    ASSERT(AtaXChannelFdo->CurrentIrp != NULL);
+    AtaXStartIo(AtaXChannelFdo, AtaXChannelFdo->CurrentIrp);
+  }
+
+  if ( InterruptData.Flags & ATAX_ENABLE_INT_REQUEST )
+    ASSERT(FALSE);
+
+  DPRINT("AtaXDpc return\n");
 }
 
 NTSTATUS
