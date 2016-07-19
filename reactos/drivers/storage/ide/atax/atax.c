@@ -280,6 +280,72 @@ AtaXNotification(
 }
 
 BOOLEAN
+StartIo(
+    IN PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension,
+    IN PSCSI_REQUEST_BLOCK Srb)
+{
+  NTSTATUS  Status;
+
+  DPRINT("StartIo: ... \n");
+  ASSERT(AtaXChannelFdoExtension);
+  ASSERT(AtaXChannelFdoExtension->CommonExtension.IsFDO);
+
+  switch ( Srb->Function )
+  {
+    case SRB_FUNCTION_EXECUTE_SCSI:
+      DPRINT("StartIo / SRB_FUNCTION_EXECUTE_SCSI \n");
+      // только один запрос может быть текущим на канале
+      if ( AtaXChannelFdoExtension->CurrentSrb )
+      {
+        DPRINT("StartIo: Already have a request!\n");
+
+        Srb->SrbStatus = SRB_STATUS_BUSY;
+
+        AtaXNotification(RequestComplete,
+                         AtaXChannelFdoExtension,
+                         Srb);
+        return FALSE;
+      }
+
+      // запрос является активным на канале
+      AtaXChannelFdoExtension->CurrentSrb = Srb;
+
+      // отправляем команду устройству
+      Status = AtaXSendCommand(AtaXChannelFdoExtension, Srb);
+      break;
+
+    case SRB_FUNCTION_IO_CONTROL:
+      DPRINT("StartIo: SRB_FUNCTION_IO_CONTROL / ControlCode %x\n", ((PSRB_IO_CONTROL)(Srb->DataBuffer))->ControlCode );
+ASSERT(FALSE);
+      break;
+
+    default:
+      DPRINT("StartIo: Srb->Function - %x FIXME\n", Srb->Function);
+      Status = SRB_STATUS_INVALID_REQUEST;
+      break;
+  }
+
+  if ( Status != SRB_STATUS_PENDING )
+  {
+    DPRINT("StartIo: Srb %p complete with Status %x\n", Srb, Status);
+
+    AtaXChannelFdoExtension->CurrentSrb = NULL;
+    Srb->SrbStatus = (UCHAR)Status;
+
+    AtaXNotification(RequestComplete,
+                     AtaXChannelFdoExtension,
+                     Srb);
+
+    AtaXNotification(NextRequest,
+                     AtaXChannelFdoExtension,
+                     NULL);
+  }
+
+  DPRINT("StartIo: return TRUE\n");
+  return TRUE;
+}
+
+BOOLEAN
 AtaXStartPacket(IN PVOID Context)
 {
   PFDO_CHANNEL_EXTENSION    AtaXChannelFdoExtension;
