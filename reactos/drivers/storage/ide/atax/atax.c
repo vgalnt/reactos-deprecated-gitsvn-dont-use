@@ -288,6 +288,55 @@ ASSERT(FALSE);
   return 0;
 }
 
+VOID
+Scsi2Atapi(IN PSCSI_REQUEST_BLOCK Srb)
+{
+  Srb->CdbLength = 12;
+
+  switch (Srb->Cdb[0])
+  {
+    case SCSIOP_MODE_SENSE:
+    {
+      PMODE_SENSE_10 modeSense10;
+      UCHAR PageCode;
+      UCHAR Length;
+
+      modeSense10 = (PMODE_SENSE_10)Srb->Cdb;
+      PageCode = ((PCDB)Srb->Cdb)->MODE_SENSE.PageCode;
+      Length = ((PCDB)Srb->Cdb)->MODE_SENSE.AllocationLength;
+
+      RtlZeroMemory(Srb->Cdb, MAXIMUM_CDB_SIZE);
+
+      modeSense10->OperationCode = ATAPI_MODE_SENSE;
+      modeSense10->PageCode = PageCode;
+      modeSense10->ParameterListLengthMsb = 0;
+      modeSense10->ParameterListLengthLsb = Length;
+      break;
+    }
+
+    case SCSIOP_MODE_SELECT:
+    {
+      PMODE_SELECT_10 modeSelect10;
+      UCHAR Length;
+
+      modeSelect10 = (PMODE_SELECT_10)Srb->Cdb;
+      Length = ((PCDB)Srb->Cdb)->MODE_SELECT.ParameterListLength;
+
+      RtlZeroMemory(Srb->Cdb, MAXIMUM_CDB_SIZE);
+
+      modeSelect10->OperationCode = ATAPI_MODE_SELECT;
+      modeSelect10->PFBit = 1;
+      modeSelect10->ParameterListLengthMsb = 0;
+      modeSelect10->ParameterListLengthLsb = Length;
+      break;
+    }
+
+    case SCSIOP_FORMAT_UNIT:
+      Srb->Cdb[0] = ATAPI_FORMAT_UNIT;
+      break;
+  }
+}
+
 NTSTATUS
 AtapiSendCommand(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,

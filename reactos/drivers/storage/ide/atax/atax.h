@@ -181,6 +181,32 @@ typedef struct _SCSI_REQUEST_BLOCK_INFO {
 
 } SCSI_REQUEST_BLOCK_INFO, *PSCSI_REQUEST_BLOCK_INFO;
 
+typedef struct _MODE_SENSE_10 {
+
+  UCHAR OperationCode;
+  UCHAR Reserved1;
+  UCHAR PageCode : 6;
+  UCHAR Pc       : 2;
+  UCHAR Reserved2[4];
+  UCHAR ParameterListLengthMsb;
+  UCHAR ParameterListLengthLsb;
+  UCHAR Reserved3[3];
+
+} MODE_SENSE_10, *PMODE_SENSE_10;
+
+typedef struct _MODE_SELECT_10 {
+
+  UCHAR OperationCode;
+  UCHAR Reserved1 : 4;
+  UCHAR PFBit     : 1;
+  UCHAR Reserved2 : 3;
+  UCHAR Reserved3[5];
+  UCHAR ParameterListLengthMsb;
+  UCHAR ParameterListLengthLsb;
+  UCHAR Reserved4[3];
+
+} MODE_SELECT_10, *PMODE_SELECT_10;
+
 typedef struct _ATAX_INTERRUPT_DATA {
 
   ULONG                     Flags;                           // Interrupt дыруш
