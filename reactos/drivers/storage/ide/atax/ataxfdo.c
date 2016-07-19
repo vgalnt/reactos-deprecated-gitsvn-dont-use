@@ -387,10 +387,10 @@ InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
   UCHAR                  StatusByte;
   UCHAR                  InterruptReason;
   BOOLEAN                Result      = FALSE;
-  //BOOLEAN                AtapiDevice = FALSE;
+  BOOLEAN                AtapiDevice = FALSE;
   BOOLEAN                BusMaster   = FALSE;
   ULONG                  WordCount = 0;
-  //ULONG                  WordsThisInterrupt = 256;
+  ULONG                  WordsThisInterrupt = 256;
   ULONG                  Status;
   ULONG                  BusMasterStatus;
   ULONG                  ix;
@@ -560,7 +560,146 @@ ASSERT(FALSE);
   else if ( InterruptReason == 2 && (StatusByte & IDE_STATUS_DRQ) )
   {
     // чтение данных
+
+    if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )
+    {
+      // чтение данных ATAPI
+
+      WordCount = READ_PORT_UCHAR(AtaXRegisters1->ByteCountLow);
+      WordCount |= READ_PORT_UCHAR(AtaXRegisters1->ByteCountHigh) << 8;
+
+      WordCount >>= 1; // bytes --> words
+
+      if ( WordCount != AtaXChannelFdoExtension->WordsLeft )
+      {
+        DPRINT("InterruptRoutine: %d words requested; %d words xferred\n", AtaXChannelFdoExtension->WordsLeft, WordCount);
+      }
+
+      if ( WordCount > AtaXChannelFdoExtension->WordsLeft )
+        WordCount = AtaXChannelFdoExtension->WordsLeft;
+    }
+    else
+    {
+      // чтение данных ATA
+
+      // сколько слов осталось передать
+      if ( AtaXChannelFdoExtension->WordsLeft < WordsThisInterrupt )
+        WordCount = AtaXChannelFdoExtension->WordsLeft;
+      else
+        WordCount = WordsThisInterrupt;
+    }
+
+    // убеждаемся, что команда действительно чтения
+    if ( Srb->SrbFlags & SRB_FLAGS_DATA_IN )
+    {
+      DPRINT("InterruptRoutine: Read interrupt\n");
+
+      AtaXWaitOnBusy(AtaXRegisters2);
+
+      if ( AtapiDevice || !AtaXChannelFdoExtension->DWordIO )
+      {
+        READ_PORT_BUFFER_USHORT(AtaXRegisters1->Data, AtaXChannelFdoExtension->DataBuffer, WordCount);
+        DPRINT("InterruptRoutine: READ_PORT_BUFFER_USHORT %x, DataBuffer - %x, WordCount - %x\n", AtaXRegisters1->Data, AtaXChannelFdoExtension->DataBuffer, WordCount);
+
+        DPRINT("InterruptRoutine: Srb->Cdb[0]- %x\n", Srb->Cdb[0]);
+        if ( Srb->Cdb[0] == SCSIOP_REQUEST_SENSE )
+        {
+          DPRINT("InterruptRoutine: Srb->DataTransferLength - %x\n", Srb->DataTransferLength);
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer - %x\n", AtaXChannelFdoExtension->DataBuffer);
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer[0]  - %x\n", AtaXChannelFdoExtension->DataBuffer[0]);
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer[1]  - %x\n", AtaXChannelFdoExtension->DataBuffer[1]);
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer[2]  - %x\n", AtaXChannelFdoExtension->DataBuffer[2]);
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer[3]  - %x\n", AtaXChannelFdoExtension->DataBuffer[3]);
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer[4]  - %x\n", AtaXChannelFdoExtension->DataBuffer[4]);
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer[5]  - %x\n", AtaXChannelFdoExtension->DataBuffer[5]);
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer[6]  - %x\n", AtaXChannelFdoExtension->DataBuffer[6]);
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer[7]  - %x\n", AtaXChannelFdoExtension->DataBuffer[7]);
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer[8]  - %x\n", AtaXChannelFdoExtension->DataBuffer[8]);
+    
+          if ( Srb->DataBuffer )
+          {
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 00) - %x\n", *((PUCHAR)Srb->DataBuffer + 0));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 01) - %x\n", *((PUCHAR)Srb->DataBuffer + 1));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 02) - %x\n", *((PUCHAR)Srb->DataBuffer + 2));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 03) - %x\n", *((PUCHAR)Srb->DataBuffer + 3));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 04) - %x\n", *((PUCHAR)Srb->DataBuffer + 4));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 05) - %x\n", *((PUCHAR)Srb->DataBuffer + 5));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 06) - %x\n", *((PUCHAR)Srb->DataBuffer + 6));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 07) - %x\n", *((PUCHAR)Srb->DataBuffer + 7));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 08) - %x\n", *((PUCHAR)Srb->DataBuffer + 8));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 09) - %x\n", *((PUCHAR)Srb->DataBuffer + 9));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 10) - %x\n", *((PUCHAR)Srb->DataBuffer + 10));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 11) - %x\n", *((PUCHAR)Srb->DataBuffer + 11));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 12) - %x\n", *((PUCHAR)Srb->DataBuffer + 12));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 13) - %x\n", *((PUCHAR)Srb->DataBuffer + 13));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 14) - %x\n", *((PUCHAR)Srb->DataBuffer + 14));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 15) - %x\n", *((PUCHAR)Srb->DataBuffer + 15));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 16) - %x\n", *((PUCHAR)Srb->DataBuffer + 16));
+            DPRINT("InterruptRoutine: *((PUCHAR)Srb->DataBuffer + 17) - %x\n", *((PUCHAR)Srb->DataBuffer + 17));
+          }
+        }
+      }
+      else
+      {
+        DPRINT("InterruptRoutine: FIXME DWordIO()\n");
+      }
+    }
+    else
+    {
+      // и как мы сюда попали?
+      DPRINT("InterruptRoutine: Interrupt reason %x, but Srb is for a read %x.\n", InterruptReason, Srb);
+      Status = SRB_STATUS_ERROR;
+      goto CompleteRequest;
+    }
+
+    if ( Srb->Cdb[0] == ATAPI_MODE_SENSE &&
+         AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )
+    {
 ASSERT(FALSE);
+    }
+
+    // корректируем адрес буфера данных и кол-во оставшихся для записи слов
+    AtaXChannelFdoExtension->DataBuffer += WordCount;
+    AtaXChannelFdoExtension->WordsLeft -= WordCount;
+
+    // проверяем все ли данные прочитаны
+    if ( AtaXChannelFdoExtension->WordsLeft == 0 )
+    {
+      if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )  // Atapi
+      {
+        // возвращаем корректный размер сектора 2048
+        // у определенных устройств будет количество секторов == 0x00
+    
+        if ( (Srb->Cdb[0] == SCSIOP_READ_CAPACITY) && //0x25
+             ((AtaXChannelFdoExtension->FullIdentifyData[Srb->TargetId].GeneralConfiguration >> 8) & 0x1f) == 0x05 )
+        {
+          DPRINT("InterruptRoutine: FullIdentifyData.GeneralConfiguration - %x\n", AtaXChannelFdoExtension->FullIdentifyData[Srb->TargetId].GeneralConfiguration);
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer - %p, *DataBuffer - %x\n", AtaXChannelFdoExtension->DataBuffer, *(PULONG)AtaXChannelFdoExtension->DataBuffer);
+
+          AtaXChannelFdoExtension->DataBuffer -= WordCount;
+
+          if ( AtaXChannelFdoExtension->DataBuffer[0] == 0 )
+            *((ULONG *) &(AtaXChannelFdoExtension->DataBuffer[0]) ) = 0xFFFFFF7F;
+
+          *((ULONG *) &(AtaXChannelFdoExtension->DataBuffer[2])) = 0x00080000;
+
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer - %p, *DataBuffer - %x\n", AtaXChannelFdoExtension->DataBuffer, *(PULONG)AtaXChannelFdoExtension->DataBuffer);
+          AtaXChannelFdoExtension->DataBuffer += WordCount;
+        }
+      }
+      else
+      {
+        // завершение для Ata
+        if ( AtaXChannelFdoExtension->WordsLeft )
+          Status = SRB_STATUS_DATA_OVERRUN;
+        else
+          Status = SRB_STATUS_SUCCESS;
+
+        DPRINT("InterruptRoutine: Read interrupt goto CompleteRequest. Status - %x\n", Status);
+        goto CompleteRequest;
+      }
+    }
+
     return TRUE;
   }
   else if ( InterruptReason == 3  && !(StatusByte & IDE_STATUS_DRQ) )
