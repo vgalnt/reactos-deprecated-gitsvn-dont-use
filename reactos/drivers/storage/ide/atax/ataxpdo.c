@@ -1160,6 +1160,18 @@ AtaXDevicePdoQueryPnPDeviceState(
 }
 
 NTSTATUS
+AtaXDevicePdoQueryDeviceRelations(
+    IN PDEVICE_OBJECT AtaXDevicePdo,
+    IN PIRP Irp)
+{
+  NTSTATUS  Status = STATUS_SUCCESS;
+  DPRINT("AtaXDevicePdoQueryDeviceRelations (%p %p)\n", AtaXDevicePdo, Irp);
+
+  DPRINT(" AtaXDevicePdoQueryDeviceRelations return - %p \n", Status);
+  return Status;
+}
+
+NTSTATUS
 AtaXDevicePdoDispatchPnp(
     IN PDEVICE_OBJECT AtaXDevicePdo,
     IN PIRP Irp)
@@ -1208,8 +1220,7 @@ ASSERT(FALSE);
 
     case IRP_MN_QUERY_DEVICE_RELATIONS:       /* 0x07 */  //AtaXDevicePdoQueryDeviceRelations
       DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_RELATIONS\n");
-ASSERT(FALSE);
-      Status = 0;//AtaXDevicePdoQueryDeviceRelations(AtaXDevicePdo, Irp);
+      Status = AtaXDevicePdoQueryDeviceRelations(AtaXDevicePdo, Irp);
       break;
 
     case IRP_MN_QUERY_CAPABILITIES:           /* 0x09 */  //AtaXDevicePdoQueryCapabilities
