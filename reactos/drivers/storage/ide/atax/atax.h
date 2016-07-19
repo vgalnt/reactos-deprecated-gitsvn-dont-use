@@ -220,6 +220,7 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
   ULONG                    SequenceNumber;                    // глобальный счётчик для пакетов
   KDPC                     Dpc;
   KSPIN_LOCK               SpinLock;
+  LONG                     TimerCount;
   ATAX_INTERRUPT_DATA      InterruptData;
 
   // Interfaces
@@ -266,6 +267,7 @@ typedef struct _PDO_DEVICE_EXTENSION {                    //// PDO расширение At
   UCHAR                    PathId;                         // Номер канала (Primari или Secondary)
   UCHAR                    TargetId;                       // Номер девайса (Master или Slave)
   UCHAR                    Lun;                            // Не используется в AtaX (0)
+  LONG                     RequestTimeout;                 // Тайм-аут запроса
   ULONG                    AttemptCount;
   PIRP                     PendingRequest;
 

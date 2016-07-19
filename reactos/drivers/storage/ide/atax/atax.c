@@ -282,8 +282,60 @@ AtaXNotification(
 BOOLEAN
 AtaXStartPacket(IN PVOID Context)
 {
+  PFDO_CHANNEL_EXTENSION    AtaXChannelFdoExtension;
+  PPDO_DEVICE_EXTENSION     AtaXDevicePdoExtension;
+  PIO_STACK_LOCATION        IoStack;
+  PSCSI_REQUEST_BLOCK       Srb;
+  PDEVICE_OBJECT            DeviceObject;
+  BOOLEAN                   Result;
+
+  DPRINT("AtaXStartPacket: Context - %p\n", Context);
+
+  DeviceObject = (PDEVICE_OBJECT)Context;
+
+  IoStack = IoGetCurrentIrpStackLocation(DeviceObject->CurrentIrp);
+  Srb = IoStack->Parameters.Scsi.Srb;
+
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)DeviceObject->DeviceExtension;
+  AtaXDevicePdoExtension  = (PPDO_DEVICE_EXTENSION)AtaXChannelFdoExtension->AtaXDevicePdo[Srb->TargetId]->DeviceExtension;
+
+  if ( AtaXChannelFdoExtension->InterruptData.Flags & ATAX_RESET )
+  {
+    AtaXChannelFdoExtension->InterruptData.Flags |= ATAX_RESET_REQUEST;
+    return TRUE;
+  }
+
+  AtaXChannelFdoExtension->TimerCount = Srb->TimeOutValue;
+  AtaXChannelFdoExtension->Flags |= ATAX_DEVICE_BUSY;
+
+  if ( Srb->SrbFlags & SRB_FLAGS_BYPASS_FROZEN_QUEUE )
+  {
+    if ( Srb->Function == SRB_FUNCTION_ABORT_COMMAND )
+    {
 ASSERT(FALSE);
-  return 0;
+    }
+    else
+    {
+      AtaXDevicePdoExtension->QueueCount++;
+    }
+  }
+  else
+  {
+    if ( Srb->SrbFlags & SRB_FLAGS_DISABLE_DISCONNECT )
+      AtaXChannelFdoExtension->Flags &= ~ATAX_DISCONNECT_ALLOWED;
+
+    AtaXDevicePdoExtension->Flags |= ATAX_LU_ACTIVE;
+    AtaXDevicePdoExtension->QueueCount++;
+  }
+
+  Srb->SrbFlags |= SRB_FLAGS_IS_ACTIVE;
+  Result = StartIo(AtaXChannelFdoExtension, Srb);
+
+  if ( AtaXChannelFdoExtension->InterruptData.Flags & ATAX_NOTIFICATION_NEEDED )
+    KeInsertQueueDpc(&AtaXChannelFdoExtension->Dpc, NULL, NULL);
+
+  DPRINT("AtaXStartPacket: Result - %x\n", Result);
+  return Result;
 }
 
 NTSTATUS
