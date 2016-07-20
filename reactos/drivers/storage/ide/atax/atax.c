@@ -957,11 +957,6 @@ ASSERT(FALSE);
       }
     }
   }
-  else
-  {
-    DPRINT(" AtaXStartIo: Srb->SrbFlags & (SRB_FLAGS_DATA_IN | SRB_FLAGS_DATA_OUT) == FALSE  \n");
-    ASSERT(FALSE);
-  }
 
   Srb->SrbFlags &= ~SRB_FLAGS_USE_DMA; // use PIO
   DPRINT(" AtaXStartIo: Srb->SrbFlags - %x\n", Srb->SrbFlags);
