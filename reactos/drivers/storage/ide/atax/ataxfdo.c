@@ -809,7 +809,7 @@ InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
     }
   }
 
-  DPRINT1("InterruptRoutine: InterruptReason - %x\n", InterruptReason);
+  DPRINT("InterruptRoutine: InterruptReason - %x\n", InterruptReason);
 
   if ( InterruptReason == 1 && (StatusByte & IDE_STATUS_DRQ) )
   {
@@ -839,10 +839,8 @@ ASSERT(FALSE);
 
       WordCount >>= 1; // bytes --> words
 
-      if ( WordCount != AtaXChannelFdoExtension->WordsLeft )
-      {
-        DPRINT("InterruptRoutine: %d words requested; %d words xferred\n", AtaXChannelFdoExtension->WordsLeft, WordCount);
-      }
+      //if ( WordCount != AtaXChannelFdoExtension->WordsLeft )
+      //  DPRINT("InterruptRoutine: %d words requested; %d words xferred\n", AtaXChannelFdoExtension->WordsLeft, WordCount);
 
       if ( WordCount > AtaXChannelFdoExtension->WordsLeft )
         WordCount = AtaXChannelFdoExtension->WordsLeft;
@@ -861,16 +859,16 @@ ASSERT(FALSE);
     // убеждаемся, что команда действительно чтения
     if ( Srb->SrbFlags & SRB_FLAGS_DATA_IN )
     {
-      DPRINT("InterruptRoutine: Read interrupt\n");
+      //DPRINT("InterruptRoutine: Read interrupt\n");
 
       AtaXWaitOnBusy(AtaXRegisters2);
 
       if ( AtapiDevice || !AtaXChannelFdoExtension->DWordIO )
       {
         READ_PORT_BUFFER_USHORT(AtaXRegisters1->Data, AtaXChannelFdoExtension->DataBuffer, WordCount);
-        DPRINT("InterruptRoutine: READ_PORT_BUFFER_USHORT %x, DataBuffer - %x, WordCount - %x\n", AtaXRegisters1->Data, AtaXChannelFdoExtension->DataBuffer, WordCount);
+        //DPRINT("InterruptRoutine: READ_PORT_BUFFER_USHORT %x, DataBuffer - %x, WordCount - %x\n", AtaXRegisters1->Data, AtaXChannelFdoExtension->DataBuffer, WordCount);
 
-        DPRINT("InterruptRoutine: Srb->Cdb[0]- %x\n", Srb->Cdb[0]);
+        //DPRINT("InterruptRoutine: Srb->Cdb[0]- %x\n", Srb->Cdb[0]);
         if ( Srb->Cdb[0] == SCSIOP_REQUEST_SENSE )
         {
           DPRINT("InterruptRoutine: Srb->DataTransferLength - %x\n", Srb->DataTransferLength);
@@ -1166,7 +1164,7 @@ AtaXProcessCompletedRequest(
 
   Srb = SrbInfo->Srb;
   Irp = Srb->OriginalRequest;
-  DPRINT("AtaXProcessCompletedRequest: Srb - %p, Irp - %p\n", Srb, Irp);
+  //DPRINT("AtaXProcessCompletedRequest: Srb - %p, Irp - %p\n", Srb, Irp);
 
   AtaXDevicePdoExtension = (AtaXChannelFdoExtension->AtaXDevicePdo[Srb->TargetId])->DeviceExtension;
 
@@ -1203,7 +1201,7 @@ AtaXProcessCompletedRequest(
 
   // уменьшаем счетчик очереди
   AtaXDevicePdoExtension->QueueCount--;
-  DPRINT("AtaXProcessCompletedRequest: AtaXDevicePdoExtension->QueueCount - %x\n", AtaXDevicePdoExtension->QueueCount);
+  //DPRINT("AtaXProcessCompletedRequest: AtaXDevicePdoExtension->QueueCount - %x\n", AtaXDevicePdoExtension->QueueCount);
 
   if ( Srb->QueueTag != SP_UNTAGGED )
   {
@@ -1221,13 +1219,13 @@ AtaXProcessCompletedRequest(
 
   if ( SRB_STATUS(Srb->SrbStatus) == SRB_STATUS_SUCCESS )
   {
-    DPRINT("AtaXProcessCompletedRequest: SRB_STATUS_SUCCESS\n");
+    //DPRINT("AtaXProcessCompletedRequest: SRB_STATUS_SUCCESS\n");
     Irp->IoStatus.Status = STATUS_SUCCESS;
 
     if ( !(Srb->SrbFlags & SRB_FLAGS_BYPASS_FROZEN_QUEUE) &&
          (AtaXDevicePdoExtension->RequestTimeout == -1) )
     {
-      DPRINT("AtaXProcessCompletedRequest: SRB_STATUS_SUCCESS  and  !SRB_FLAGS_BYPASS_FROZEN_QUEUE\n");
+      //DPRINT("AtaXProcessCompletedRequest: SRB_STATUS_SUCCESS  and  !SRB_FLAGS_BYPASS_FROZEN_QUEUE\n");
       AtaXGetNextRequest(AtaXChannelFdoExtension, AtaXDevicePdoExtension);
     }
     else

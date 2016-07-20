@@ -669,7 +669,7 @@ AtapiSendCommand(
   StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
   AtaXWaitOnBusy(AtaXRegisters2);
 
-if ( TRUE )
+if ( 0 ) //debug messages
 {
   UCHAR ix;
 
@@ -919,15 +919,15 @@ ASSERT(FALSE);
 
   if ( Srb->SrbFlags & (SRB_FLAGS_DATA_IN | SRB_FLAGS_DATA_OUT) )
   {
-    DPRINT(" AtaXStartIo: Srb->SrbFlags & (SRB_FLAGS_DATA_IN | SRB_FLAGS_DATA_OUT) == TRUE \n");
+    //DPRINT(" AtaXStartIo: Srb->SrbFlags & (SRB_FLAGS_DATA_IN | SRB_FLAGS_DATA_OUT) == TRUE \n");
 
     if ( Irp->MdlAddress != NULL )
     {
-      DPRINT(" AtaXStartIo: Irp->MdlAddress - %p\n", Irp->MdlAddress);
+      //DPRINT(" AtaXStartIo: Irp->MdlAddress - %p\n", Irp->MdlAddress);
       SrbInfo->DataOffset = MmGetMdlVirtualAddress(Irp->MdlAddress);
     }
 
-    DPRINT(" AtaXStartIo: Srb->SrbFlags - %x\n", Srb->SrbFlags);
+    //DPRINT(" AtaXStartIo: Srb->SrbFlags - %x\n", Srb->SrbFlags);
 
     if ( Srb->SrbFlags & SRB_FLAGS_USE_DMA )
     {
@@ -959,7 +959,7 @@ ASSERT(FALSE);
   }
 
   Srb->SrbFlags &= ~SRB_FLAGS_USE_DMA; // use PIO
-  DPRINT(" AtaXStartIo: Srb->SrbFlags - %x\n", Srb->SrbFlags);
+  //DPRINT(" AtaXStartIo: Srb->SrbFlags - %x\n", Srb->SrbFlags);
 
   if ( SynchronizeStartPacket(AtaXChannelFdo) < 0 )
   {
