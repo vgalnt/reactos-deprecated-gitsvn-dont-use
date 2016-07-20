@@ -39,6 +39,16 @@ typedef struct _AHCI_INTERRUPT_RESOURCE {
 
 } AHCI_INTERRUPT_RESOURCE, *PAHCI_INTERRUPT_RESOURCE;
 
+typedef NTSTATUS
+(NTAPI *PAHCI_START_IO)(IN PVOID  ChannelPdoExtension,
+                        IN PIDENTIFY_DATA Identify,
+                        IN PSCSI_REQUEST_BLOCK  Srb);
+
+typedef NTSTATUS
+(NTAPI *PAHCI_INTERRUPT)(IN PVOID  ChannelPdoExtension,
+                         IN PIDENTIFY_DATA IdentifyData,
+                         IN PSCSI_REQUEST_BLOCK  Srb);
+
 typedef struct _AHCI_INTERFACE {
 
   // generic interface header
@@ -53,6 +63,9 @@ typedef struct _AHCI_INTERFACE {
   PAHCI_INTERRUPT_RESOURCE  InterruptResource;
   PAHCI_MEMORY_REGISTERS    Abar;
 
+
+  PAHCI_START_IO            AhciStartIo;
+  PAHCI_INTERRUPT           AhciInterrupt;
 
 } AHCI_INTERFACE, *PAHCI_INTERFACE;
 
