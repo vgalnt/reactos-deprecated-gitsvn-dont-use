@@ -207,7 +207,6 @@ AtaXGetSrbData(IN PSCSI_REQUEST_BLOCK Srb)
   return SrbData;
 }
 
-
 VOID
 AtaXNotification(
     IN SCSI_NOTIFICATION_TYPE NotificationType,
@@ -337,6 +336,128 @@ AtaXNotification(
 
   // запрос DPC после обработки прерывания
   AtaXChannelFdoExtension->InterruptData.Flags |= ATAX_NOTIFICATION_NEEDED;
+}
+
+VOID
+AtaXSendRequestSense(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PSCSI_REQUEST_BLOCK InitialSrb)
+{
+  PPDO_DEVICE_EXTENSION  AtaXDevicePdoExtension;
+  PSCSI_REQUEST_BLOCK    Srb;
+  PCDB                   Cdb;
+  PIRP                   Irp;
+  PIO_STACK_LOCATION     IrpStack;
+  LARGE_INTEGER          LargeInt;
+  PVOID *                Ptr;
+
+  DPRINT("AtaXSendRequestSense: ... \n");
+
+  AtaXDevicePdoExtension = AtaXChannelFdoExtension->AtaXDevicePdo[InitialSrb->TargetId]->DeviceExtension;
+
+  if ( 0 )
+  {
+    DPRINT("AtaXSendRequestSense: InitialSrb                                              - %p\n", InitialSrb);
+    DPRINT("AtaXSendRequestSense: InitialSrb->SenseInfoBuffer                             - %p\n", InitialSrb->SenseInfoBuffer);
+    DPRINT("AtaXSendRequestSense: InitialSrb->SenseInfoBufferLength                       - %x\n", InitialSrb->SenseInfoBufferLength);
+    DPRINT("AtaXSendRequestSense: InitialSrb->QueueAction == SRB_SIMPLE_TAG_REQUEST       - %x\n", InitialSrb->QueueAction == SRB_SIMPLE_TAG_REQUEST);
+    DPRINT("AtaXSendRequestSense: InitialSrb->SrbFlags & SRB_FLAGS_DISABLE_SYNCH_TRANSFER - %x\n", InitialSrb->SrbFlags & SRB_FLAGS_DISABLE_SYNCH_TRANSFER);  // Disable synchronous transfer for these requests.
+    DPRINT("AtaXSendRequestSense: InitialSrb->SrbFlags & SRB_FLAGS_NO_QUEUE_FREEZE        - %x\n", InitialSrb->SrbFlags & SRB_FLAGS_NO_QUEUE_FREEZE);         // Disable freezing the queue, since all we do is unfreeze it anyways.
+  }
+
+  Srb = ExAllocatePool(NonPagedPool, sizeof(SCSI_REQUEST_BLOCK) + sizeof(PVOID));
+
+  if ( Srb == NULL )
+  {
+    DPRINT1("AtaXSendRequestSense failed!\n");
+    return;
+  }
+
+  RtlZeroMemory(Srb, sizeof(SCSI_REQUEST_BLOCK));
+
+  LargeInt.QuadPart = (LONGLONG) 1;
+
+  Irp = IoBuildAsynchronousFsdRequest(
+               IRP_MJ_READ,
+               AtaXChannelFdoExtension->CommonExtension.SelfDevice,
+               InitialSrb->SenseInfoBuffer,
+               InitialSrb->SenseInfoBufferLength,
+               &LargeInt,
+               NULL);
+
+  if ( Irp == NULL )
+  {
+    DPRINT1("AtaXSendRequestSense failed!\n");
+    ExFreePool(Srb);
+    return;
+  }
+
+  IoSetCompletionRoutine(Irp, (PIO_COMPLETION_ROUTINE)AtaXCompletionRequestSense, Srb, TRUE, TRUE, TRUE);
+
+  IrpStack = IoGetNextIrpStackLocation(Irp);
+
+  IrpStack->MajorFunction = IRP_MJ_SCSI;
+  IrpStack->Parameters.Others.Argument1 = (PVOID)Srb;  /* Put Srb address into Irp... */
+  IrpStack->DeviceObject = AtaXChannelFdoExtension->AtaXDevicePdo[InitialSrb->TargetId];
+  //DPRINT("AtaXSendRequestSense IrpStack->DeviceObject - %p\n", IrpStack->DeviceObject);
+
+  Srb->OriginalRequest = Irp;
+
+  /* Save Srb */
+  Ptr = (PVOID *)(Srb + 1);
+  *Ptr = InitialSrb;
+
+  /* Build CDB for REQUEST SENSE */
+  Srb->CdbLength = 6;
+  Cdb = (PCDB)Srb->Cdb;
+
+  Cdb->CDB6INQUIRY.OperationCode     = SCSIOP_REQUEST_SENSE;
+  Cdb->CDB6INQUIRY.LogicalUnitNumber = 0;
+  Cdb->CDB6INQUIRY.Reserved1         = 0;
+  Cdb->CDB6INQUIRY.PageCode          = 0;
+  Cdb->CDB6INQUIRY.IReserved         = 0;
+  Cdb->CDB6INQUIRY.AllocationLength  = (UCHAR)InitialSrb->SenseInfoBufferLength;
+  Cdb->CDB6INQUIRY.Control           = 0;
+
+  /* Set address */
+  Srb->TargetId = InitialSrb->TargetId;
+  Srb->Lun      = InitialSrb->Lun;
+  Srb->PathId   = InitialSrb->PathId;
+
+  Srb->Function = SRB_FUNCTION_EXECUTE_SCSI;
+  Srb->Length   = sizeof(SCSI_REQUEST_BLOCK);
+
+  Srb->TimeOutValue = 2;  /* Timeout will be 2 seconds */
+
+  /* No auto request sense */
+  Srb->SenseInfoBufferLength = 0;
+  Srb->SenseInfoBuffer       = NULL;
+
+  /* Set necessary flags */
+  Srb->SrbFlags = SRB_FLAGS_DATA_IN |
+                  SRB_FLAGS_BYPASS_FROZEN_QUEUE |
+                  SRB_FLAGS_DISABLE_DISCONNECT;
+
+  /* Transfer disable synch transfer flag */
+  if ( InitialSrb->SrbFlags & SRB_FLAGS_DISABLE_SYNCH_TRANSFER )
+    Srb->SrbFlags |= SRB_FLAGS_DISABLE_SYNCH_TRANSFER;
+
+  Srb->SrbFlags &= ~SRB_FLAGS_USE_DMA;  //PIO mode
+
+  Srb->DataBuffer = InitialSrb->SenseInfoBuffer;
+  Srb->DataTransferLength = InitialSrb->SenseInfoBufferLength;  /* Fill the transfer length */
+
+  /* Clear statuses */
+  Srb->ScsiStatus = Srb->SrbStatus = 0;
+  Srb->NextSrb = 0;
+
+  KeAcquireSpinLockAtDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+  AtaXChannelFdoExtension->Flags &= ~ATAX_DISCONNECT_ALLOWED;
+  KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
+
+  IoCallDriver(AtaXDevicePdoExtension->CommonExtension.SelfDevice, Irp);
+
+  DPRINT("AtaXSendRequestSense done\n");
 }
 
 NTSTATUS
