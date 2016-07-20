@@ -30,6 +30,27 @@ AtaXWaitOnBusy(IN PATAX_REGISTERS_2 AtaXRegisters2)
 }
 
 VOID 
+AtaXSataWaitOnBusy(IN PATAX_REGISTERS_1 AtaXRegisters1)
+{
+  ULONG ix;
+  UCHAR Status;
+
+  for ( ix = 0; ix < 20000; ix++ )
+  {
+    Status = READ_PORT_UCHAR(AtaXRegisters1->Status);
+    if ( Status & IDE_STATUS_BUSY )
+    {
+      KeStallExecutionProcessor(50);
+      continue;
+    }
+    else
+    {
+      break;
+    }
+  }
+}
+
+VOID 
 AtaXWaitOnBaseBusy(IN PATAX_REGISTERS_1 AtaXRegisters1)
 {
   ULONG ix;
