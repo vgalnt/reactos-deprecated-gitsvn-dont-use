@@ -279,9 +279,21 @@ BusMasterReadStatus(IN PPDO_DEVICE_EXTENSION DeviceExtension)//ChannelPdoExtensi
 NTSTATUS
 BusMasterComplete(IN PPDO_DEVICE_EXTENSION DeviceExtension)//ChannelPdoExtension
 {
-  DPRINT("BusMasterComplete: ... \n");
-ASSERT(FALSE);
-  return 0;
+	PDMA_ADAPTER DmaAdapter = DeviceExtension->DmaAdapter;
+
+	DPRINT("BusMasterComplete: DeviceExtension - %p\n", DeviceExtension);
+
+	DmaAdapter->DmaOperations->PutScatterGatherList(
+			DeviceExtension->DmaAdapter,
+			DeviceExtension->SGList,
+			DeviceExtension->WriteToDevice);
+
+	DeviceExtension->SGList                 = 0;
+	DeviceExtension->AllocateAdapter        = 0;
+	DeviceExtension->AllocateAdapterContext = 0;
+
+	DPRINT("BusMasterComplete: return STATUS_SUCCESS\n");
+	return STATUS_SUCCESS;
 }
 
 NTSTATUS
