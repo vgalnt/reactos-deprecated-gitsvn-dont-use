@@ -459,8 +459,7 @@ AtaReadWrite(
       WRITE_PORT_UCHAR(AtaXRegisters1->Command, IDE_COMMAND_WRITE_DMA);
       BusMasterInterface->BusMasterStart(BusMasterInterface->ChannelPdoExtension);
 
-      Status = STATUS_SUCCESS;
-      return Status;
+      return STATUS_SUCCESS;
     }
     else
     {
@@ -614,6 +613,7 @@ AtapiSendCommand(
   UCHAR              StatusByte;
   ULONG              ix;
   ULONG              DeviceNumber;
+  BOOLEAN            SataMode;
 
   DPRINT("AtapiSendCommand: Command %x to device %d\n", Srb->Cdb[0], Srb->TargetId);
   
@@ -625,14 +625,35 @@ AtapiSendCommand(
   if ( !(Flags & DFLAGS_ATAPI_DEVICE) )
     return SRB_STATUS_SELECTION_TIMEOUT;  //не ATAPI устройство
 
-  DeviceNumber = Srb->TargetId & 1;
+  if ( AtaXChannelFdoExtension->SataInterface.SataBaseAddress )
+  {
+    SataMode = TRUE;
+    DeviceNumber = 0;
+  }
+  else
+  {
+    SataMode = FALSE;
+    DeviceNumber = Srb->TargetId & 1;
+  }
 
   // Выбираем устройство
   WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect, (UCHAR)((DeviceNumber << 4) | IDE_DRIVE_SELECT));
 
-  // Считываем альтернативный регистр состояния
-  StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
-  DPRINT("AtapiSendCommand: Entered with StatusByte - %x\n", StatusByte);
+  if ( SataMode )
+  {
+    // Считываем альтернативный регистр состояния
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+    DPRINT("AtapiSendCommand: Entered with StatusByte - %x\n", StatusByte);
+    // Считываем  регистр состояния
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+    DPRINT("AtapiSendCommand: Entered with StatusByte - %x\n", StatusByte);
+  }
+  else
+  {
+    // Считываем альтернативный регистр состояния
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+    //DPRINT("AtapiSendCommand: Entered with StatusByte - %x\n", StatusByte);
+  }
 
   if ( StatusByte & IDE_STATUS_BUSY )
   {
@@ -665,8 +686,18 @@ AtapiSendCommand(
 
     for ( ix = 0; ix < 0x10000; ix++ )
     {
-      // Считываем альтернативный регистр состояния
-      StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+      if ( SataMode )
+      {
+        // Считываем альтернативный регистр состояния
+        StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+        // Считываем  регистр состояния
+        StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+      }
+      else
+      {
+        // Считываем альтернативный регистр состояния
+        StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+      }
 
       if ( StatusByte & IDE_STATUS_DRQ )
         READ_PORT_USHORT(AtaXRegisters1->Data);
@@ -676,8 +707,10 @@ AtapiSendCommand(
 
     if ( ix == 0x10000 )
     {
-      DPRINT("AtapiSendCommand: DRQ still asserted.Status (%x)\n", StatusByte);
-      AtaXSoftReset(AtaXRegisters1, AtaXRegisters2, DeviceNumber);
+      if ( SataMode )
+        AtaXSataSoftReset(AtaXRegisters1, DeviceNumber);
+      else
+        AtaXSoftReset(AtaXRegisters1, AtaXRegisters2, DeviceNumber);
 
       DPRINT("AtapiSendCommand: Issued soft reset to Atapi device. \n");
       // инициализируем Atapi устройство
@@ -711,8 +744,20 @@ AtapiSendCommand(
   AtaXChannelFdoExtension->DataBuffer = (PUSHORT)Srb->DataBuffer;   // указатель буфера данных
   AtaXChannelFdoExtension->WordsLeft = Srb->DataTransferLength / 2; // осталось передать слов
 
-  AtaXWaitOnBusy(AtaXRegisters2);
-  StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+  if ( SataMode )
+  {
+    AtaXSataWaitOnBusy(AtaXRegisters1);
+    // Считываем альтернативный регистр состояния
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+    // Считываем  регистр состояния
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+  }
+  else
+  {
+    AtaXWaitOnBusy(AtaXRegisters2);
+    // Считываем альтернативный регистр состояния
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+  }
 
   // устанавливаем количество байт пересылки в соотвктствующие регистры
   ByteCountLow = (UCHAR)(Srb->DataTransferLength & 0xFF);
@@ -738,9 +783,22 @@ AtapiSendCommand(
   else
   {
     // ждем DRQ
-    AtaXWaitOnBusy(AtaXRegisters2);
-    AtaXWaitForDrq(AtaXRegisters2);
-    StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+    if ( SataMode )
+    {
+      AtaXSataWaitOnBusy(AtaXRegisters1);
+      AtaXSataWaitForDrq(AtaXRegisters1);
+      // Считываем альтернативный регистр состояния
+      StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+      // Считываем  регистр состояния
+      StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+    }
+    else
+    {
+      AtaXWaitOnBusy(AtaXRegisters2);
+      AtaXWaitForDrq(AtaXRegisters2);
+      // Считываем альтернативный регистр состояния
+      StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+    }
 
     if ( !(StatusByte & IDE_STATUS_DRQ) )
     {
@@ -751,7 +809,11 @@ AtapiSendCommand(
 
   // считываем регистр состояния, тем самым сбрасываем прерывание
   StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
-  AtaXWaitOnBusy(AtaXRegisters2);
+
+  if ( SataMode )
+    AtaXSataWaitOnBusy(AtaXRegisters1);
+  else
+    AtaXWaitOnBusy(AtaXRegisters2);
 
 if ( 0 ) //debug messages
 {
@@ -771,14 +833,11 @@ if ( 0 ) //debug messages
 
   if ( Srb->SrbFlags & SRB_FLAGS_USE_DMA )
   {
-    //PBUS_MASTER_INTERFACE BusMasterInterface;
+    PBUS_MASTER_INTERFACE BusMasterInterface;
 
-    DPRINT("AtapiSendCommand: SRB_FLAGS_USE_DMA\n");
-
-    //BusMasterInterface = &AtaXChannelFdoExtension->BusMasterInterface;
+    BusMasterInterface = &AtaXChannelFdoExtension->BusMasterInterface;
     AtaXChannelFdoExtension->BusMaster = TRUE;
-ASSERT(FALSE);
-    //BusMasterInterface->BusMasterStart(BusMasterInterface->ChannelPdoExtension);
+    BusMasterInterface->BusMasterStart(BusMasterInterface->ChannelPdoExtension);
   }
 
   DPRINT(" AtapiSendCommand: return - %x\n", SRB_STATUS_PENDING);
