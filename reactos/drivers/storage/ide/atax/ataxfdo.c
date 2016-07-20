@@ -480,9 +480,15 @@ AtaXParseTranslatedResources(
       {
         AtaXChannelFdoExtension->InterruptShareDisposition = Descriptor->ShareDisposition;
 
-        if ( 0)//AtaXChannelFdoExtension->SataInterface.Size )
+        if ( AtaXChannelFdoExtension->SataInterface.Size )
         {
-ASSERT(FALSE);
+          PSATA_INTERRUPT_RESOURCE  InterruptResource = AtaXChannelFdoExtension->SataInterface.InterruptResource;
+
+          AtaXChannelFdoExtension->InterruptShareDisposition = InterruptResource->InterruptShareDisposition;
+          AtaXChannelFdoExtension->InterruptFlags            = InterruptResource->InterruptFlags;
+          AtaXChannelFdoExtension->InterruptLevel            = InterruptResource->InterruptLevel;
+          AtaXChannelFdoExtension->InterruptVector           = InterruptResource->InterruptVector;
+          AtaXChannelFdoExtension->InterruptAffinity         = InterruptResource->InterruptAffinity;
         }
         else
         {
