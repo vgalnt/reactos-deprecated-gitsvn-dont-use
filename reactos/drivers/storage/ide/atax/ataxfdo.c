@@ -422,6 +422,40 @@ Atapi2Scsi(
   return bytesAdjust >> 1;  // convert to words
 }
 
+NTSTATUS
+AtaXConvertSrbStatus(UCHAR SrbStatus)
+{
+  switch ( SRB_STATUS(SrbStatus) )
+  {
+    case SRB_STATUS_TIMEOUT:                /* 0x09 */
+    case SRB_STATUS_COMMAND_TIMEOUT:        /* 0x0B */
+    case SRB_STATUS_BUS_RESET:              /* 0x0E */
+      return STATUS_IO_TIMEOUT;
+
+    case SRB_STATUS_INVALID_REQUEST:        /* 0x06 */
+    case SRB_STATUS_BAD_SRB_BLOCK_LENGTH:   /* 0x15 */
+    case SRB_STATUS_BAD_FUNCTION:           /* 0x22 */
+      return STATUS_INVALID_DEVICE_REQUEST;
+
+    case SRB_STATUS_NO_DEVICE:              /* 0x08 */
+    case SRB_STATUS_INVALID_LUN:            /* 0x20 */
+    case SRB_STATUS_INVALID_TARGET_ID:      /* 0x21 */
+    case SRB_STATUS_NO_HBA:                 /* 0x11 */
+      return STATUS_DEVICE_DOES_NOT_EXIST;
+
+    case SRB_STATUS_DATA_OVERRUN:           /* 0x12 */
+      return STATUS_BUFFER_OVERFLOW;
+
+    case SRB_STATUS_SELECTION_TIMEOUT:      /* 0x0A */
+      return STATUS_DEVICE_NOT_CONNECTED;
+
+    default:
+      return STATUS_IO_DEVICE_ERROR;
+  }
+
+  return STATUS_IO_DEVICE_ERROR;
+}
+
 BOOLEAN 
 InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
 {
@@ -1017,8 +1051,7 @@ AtaXProcessCompletedRequest(
 
   DPRINT("AtaXProcessCompletedRequest: SrbStatus not SUCCESS !\n");
 
-ASSERT(FALSE);
-  //Irp->IoStatus.Status = AtaXConvertSrbStatus(Srb->SrbStatus);
+  Irp->IoStatus.Status = AtaXConvertSrbStatus(Srb->SrbStatus);
 
   DPRINT("AtaXProcessCompletedRequest: Srb->ScsiStatus - %x\n", Srb->ScsiStatus);
 
