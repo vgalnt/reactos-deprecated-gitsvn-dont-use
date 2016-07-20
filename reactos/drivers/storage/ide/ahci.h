@@ -6,6 +6,10 @@
 #include <srb.h>
 
 
+typedef struct _AHCI_COMMAND_LIST {        // 1024 byte - aligned (0x0400)
+  AHCI_COMMAND_HEADER Header[32];
+} AHCI_COMMAND_LIST, *PAHCI_COMMAND_LIST; 
+
 typedef struct _AHCI_RECEIVED_FIS {        // 256 byte - aligned  (0x0100)
 
   FIS_DMA_SETUP        FisDmaSetup;      // DSFIS   When a DMA setup FIS arrives from the device, the HBA copies it to the DSFIS area of this structure
