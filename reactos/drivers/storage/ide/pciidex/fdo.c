@@ -541,6 +541,7 @@ PciIdeXFdoQueryBusRelations(
 		PdoDeviceExtension->Common.IsFDO = FALSE;
 		PdoDeviceExtension->Channel = i;
 		PdoDeviceExtension->ControllerFdo = DeviceObject;
+		PdoDeviceExtension->SelfDevice = Pdo;
 		Pdo->Flags |= DO_BUS_ENUMERATED_DEVICE;
 		Pdo->Flags &= ~DO_DEVICE_INITIALIZING;
 

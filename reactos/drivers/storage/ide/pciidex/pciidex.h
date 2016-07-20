@@ -9,6 +9,9 @@
 #define PRIMARY_CHANNEL		0x00
 #define SECONDARY_CHANNEL	0x01
 
+typedef NTSTATUS
+(NTAPI *PALLOCATE_ADAPTER)(IN ULONG AllocateAdapterContext);
+
 typedef struct _PCIIDEX_DRIVER_EXTENSION
 {
 	PCONTROLLER_PROPERTIES HwGetControllerProperties;
@@ -46,11 +49,17 @@ typedef struct _PDO_DEVICE_EXTENSION
 
 	ULONG Channel;
 	PDEVICE_OBJECT ControllerFdo;
+	PDEVICE_OBJECT SelfDevice;
 
 	PDMA_ADAPTER DmaAdapter;
 	ULONG NumberOfMapRegisters;
 	PVOID CommonBuffer;
 	PHYSICAL_ADDRESS LogicalAddress;
+
+	PSCATTER_GATHER_LIST SGList;
+	PVOID AllocateAdapter;
+	ULONG AllocateAdapterContext;
+	BOOLEAN WriteToDevice;
 
 } PDO_DEVICE_EXTENSION, *PPDO_DEVICE_EXTENSION;
 

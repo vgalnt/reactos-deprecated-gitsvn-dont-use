@@ -5,6 +5,121 @@
 
 //#define MAX_SG_ELEMENTS 0x20 <-- in reactos\hal\halx86\generic\dma.c
 
+
+//PDRIVER_LIST_CONTROL
+VOID
+AdapterListControl(
+    IN PDEVICE_OBJECT DeviceObject,
+    IN PIRP Irp,
+    IN PSCATTER_GATHER_LIST ScatterGather,
+    IN PVOID DeviceExtension)
+{
+	PPDO_DEVICE_EXTENSION              ChannelPdoExtension;
+	PFDO_DEVICE_EXTENSION              ControllerFdoExtension;
+	PPHYSICAL_REGION_DESCRIPTOR_TABLE  TablePRD;
+	ULONG                              LengthElement;
+	ULONG                              AddressElement;
+	ULONG                              BusMasterChannelBase;
+	ULONG                              ix, jx;
+	ULONG                              len;
+	ULONG                              BytesLimit = 0x10000; //64 Kbyte boundary
+
+	DPRINT("AdapterListControl \n");
+
+	ChannelPdoExtension = (PPDO_DEVICE_EXTENSION)DeviceExtension;
+	ChannelPdoExtension->SGList = ScatterGather;
+
+	ix = 0;
+	jx = 0;
+
+	if ( ScatterGather->NumberOfElements > 0  )
+	{
+		for (ix = 0; ix < ScatterGather->NumberOfElements; ix++)
+		{
+			DPRINT("AdapterListControl: ix - %x\n", ix);
+
+			AddressElement = ScatterGather->Elements[ix].Address.LowPart;
+			LengthElement  = ScatterGather->Elements[ix].Length;
+
+			DPRINT("AdapterListControl: AddressElement - %p\n", AddressElement);
+			DPRINT("AdapterListControl: LengthElement  - %p\n", LengthElement);
+
+			if ( LengthElement > 0 )
+			{
+				do
+				{
+					DPRINT("AdapterListControl: NumberOfMapRegisters - %x\n", ChannelPdoExtension->NumberOfMapRegisters);
+
+					TablePRD = ChannelPdoExtension->CommonBuffer;
+					DPRINT("AdapterListControl: TablePRD - %p\n", TablePRD);
+
+					TablePRD->Elements[jx].BaseAddress = AddressElement;
+					len = BytesLimit - (USHORT)AddressElement;
+
+					DPRINT("AdapterListControl: AddressElement - %p\n", AddressElement);
+					DPRINT("AdapterListControl: len            - %x\n", len);
+
+					if ( len >= LengthElement )
+					{
+						DPRINT("AdapterListControl: len >= LengthElement\n");
+
+						if ( LengthElement > BytesLimit )
+						{
+							DPRINT("AdapterListControl: LengthElement > BytesLimit\n");
+							TablePRD->Elements[jx].ByteCount = 0;
+							AddressElement += BytesLimit;
+							LengthElement -= BytesLimit;
+						}
+						else
+						{
+							DPRINT("AdapterListControl: LengthElement <= BytesLimit\n");
+							TablePRD->Elements[jx].ByteCount = (USHORT)(LengthElement & 0x0000FFFE);
+							AddressElement += (USHORT)(LengthElement & 0x0000FFFE);
+							LengthElement = 0;
+						}
+					}
+					else
+					{
+						DPRINT("AdapterListControl: len < LengthElement\n");
+						AddressElement += len;
+						TablePRD->Elements[jx].ByteCount = (USHORT)len;
+						LengthElement -= len;
+					}
+
+					TablePRD->Elements[jx].EndTable &= 0x7FFF;
+
+					DPRINT("AdapterListControl: TablePRD->Elements[%x].BaseAddress - %p\n", jx, TablePRD->Elements[jx].BaseAddress);
+					DPRINT("AdapterListControl: TablePRD->Elements[%x].ByteCount   - %x\n", jx, TablePRD->Elements[jx].ByteCount);
+					DPRINT("AdapterListControl: TablePRD->Elements[%x].EndTable    - %x\n", jx, TablePRD->Elements[jx].EndTable);
+
+					++jx;
+				}
+				while ( LengthElement );
+			}
+		}
+	}
+
+	if ( jx > 0 )
+	  TablePRD->Elements[jx-1].EndTable |= 0x8000;
+	else
+	  TablePRD->Elements[jx].EndTable |= 0x8000;
+
+	ControllerFdoExtension = (PFDO_DEVICE_EXTENSION)ChannelPdoExtension->ControllerFdo->DeviceExtension;
+	BusMasterChannelBase = ControllerFdoExtension->BusMasterBase + 8 * (ChannelPdoExtension->Channel & 1);//BAR4+0 - Primary channel, BAR4+8 - Secondary channel
+
+	DPRINT("AdapterListControl: BusMasterChannelBase - %p\n", BusMasterChannelBase);
+
+	//BusMasterDisable
+	WRITE_PORT_UCHAR((PUCHAR)BusMasterChannelBase, 0);
+	WRITE_PORT_UCHAR((PUCHAR)(BusMasterChannelBase + 2), 6);
+
+	//Write to Descriptor Table Pointer Register
+	DPRINT("AdapterListControl: ChannelPdoExtension->LogicalAddress.LowPart - %p\n", ChannelPdoExtension->LogicalAddress.LowPart);
+	WRITE_PORT_ULONG((PULONG)(BusMasterChannelBase + 4), ChannelPdoExtension->LogicalAddress.LowPart);
+
+	((PALLOCATE_ADAPTER)ChannelPdoExtension->AllocateAdapter)(ChannelPdoExtension->AllocateAdapterContext);
+}
+
 NTSTATUS
 BusMasterPrepare(
     IN PPDO_DEVICE_EXTENSION  DeviceExtension,
