@@ -432,7 +432,13 @@ AtaReadWrite(
     // отправляем команду чтения
     if ( Srb->SrbFlags & SRB_FLAGS_USE_DMA )
     {
-ASSERT(FALSE);
+      PBUS_MASTER_INTERFACE BusMasterInterface;
+
+      BusMasterInterface = &AtaXChannelFdoExtension->BusMasterInterface;
+
+      AtaXChannelFdoExtension->BusMaster = TRUE;
+      WRITE_PORT_UCHAR(AtaXRegisters1->Command, IDE_COMMAND_READ_DMA);
+      BusMasterInterface->BusMasterStart(BusMasterInterface->ChannelPdoExtension);
     }
     else
     {
@@ -445,7 +451,16 @@ ASSERT(FALSE);
     // отправляем команду записи
     if ( Srb->SrbFlags & SRB_FLAGS_USE_DMA )
     {
-ASSERT(FALSE);
+      PBUS_MASTER_INTERFACE BusMasterInterface;
+
+      BusMasterInterface = &AtaXChannelFdoExtension->BusMasterInterface;
+
+      AtaXChannelFdoExtension->BusMaster = TRUE;
+      WRITE_PORT_UCHAR(AtaXRegisters1->Command, IDE_COMMAND_WRITE_DMA);
+      BusMasterInterface->BusMasterStart(BusMasterInterface->ChannelPdoExtension);
+
+      Status = STATUS_SUCCESS;
+      return Status;
     }
     else
     {
