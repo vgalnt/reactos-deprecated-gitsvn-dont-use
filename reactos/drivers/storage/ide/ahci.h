@@ -137,6 +137,39 @@ typedef struct _FIS_BIST_ACTIVATE { // fixme - rename fields
 
 } FIS_BIST_ACTIVATE, *PFIS_BIST_ACTIVATE;
 
+typedef struct _FIS_PIO_SETUP {
+
+  UCHAR  FISType;                   // 0x5F  FIS_TYPE_PIO_SETUP
+
+  UCHAR  PortMultiplierPort :4;     // Port multiplier
+  UCHAR  Reserved0          :1;
+  UCHAR  Direction          :1;     // Data transfer direction, 1 - Device to Host
+  UCHAR  Interrupt          :1;     // 
+  UCHAR  Reserved1          :1;
+
+  UCHAR  Status;                    // 
+  UCHAR  Error;                     // 
+
+  UCHAR  LBA0;                      // LBA low register  7:0
+  UCHAR  LBA1;                      // LBA mid register  15:8
+  UCHAR  LBA2;                      // LBA high register 23:16
+  UCHAR  Device;                    // Device register
+
+  UCHAR  LBA3;                      // LBA register      31:24
+  UCHAR  LBA4;                      // LBA register      39:32
+  UCHAR  LBA5;                      // LBA register      47:40
+  UCHAR  Reserved2;
+
+  UCHAR  CountLow;                  // Count register   7:0
+  UCHAR  CountHigh;                 // Count register  15:8
+  UCHAR  Reserved3;
+  UCHAR  EStatus;
+
+  USHORT  TransferCount;
+  USHORT  Reserved4;
+ 
+} FIS_PIO_SETUP, *PFIS_PIO_SETUP;
+
 //-------------------------------------------------
 
 typedef struct _AHCI_PRD {
