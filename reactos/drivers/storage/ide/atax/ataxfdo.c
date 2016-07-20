@@ -793,28 +793,78 @@ InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
   BOOLEAN                Result      = FALSE;
   BOOLEAN                AtapiDevice = FALSE;
   BOOLEAN                BusMaster   = FALSE;
+  BOOLEAN                AhciControl = FALSE;
+  BOOLEAN                SataMode;
   ULONG                  WordCount = 0;
   ULONG                  WordsThisInterrupt = 256;
   ULONG                  Status;
   ULONG                  BusMasterStatus;
   ULONG                  ix;
   PBUS_MASTER_INTERFACE  BusMasterInterface;
-
-  DPRINT(" InterruptRoutine:  AtaXChannelFdoExtension - %p \n", AtaXChannelFdoExtension );
+  ULONG                  AhciInterruptStatus;
 
   BusMasterInterface = &AtaXChannelFdoExtension->BusMasterInterface;
   AtaXRegisters1     = &AtaXChannelFdoExtension->BaseIoAddress1;
   AtaXRegisters2     = &AtaXChannelFdoExtension->BaseIoAddress2;
   Srb                = AtaXChannelFdoExtension->CurrentSrb;
 
+  //DPRINT("InterruptRoutine: AtaXChannelFdoExtension - %p, Srb - %p\n", AtaXChannelFdoExtension, Srb);
+
+  if ( AtaXChannelFdoExtension->AhciInterface )
+  {
+    // AHCI
+
+    Status = AtaXChannelFdoExtension->AhciInterface->AhciInterrupt(
+                 AtaXChannelFdoExtension->AhciInterface->ChannelPdoExtension,
+                 &AtaXChannelFdoExtension->FullIdentifyData[0],
+                 Srb);
+
+    if ( NT_SUCCESS(Status) )
+    {
+      Result = TRUE;
+
+      if ( Srb )
+      {
+        AtaXChannelFdoExtension->ExpectingInterrupt = FALSE;
+  
+        Status = SRB_STATUS_SUCCESS;
+        //Status = SRB_STATUS_ERROR;
+        //Status = SRB_STATUS_DATA_OVERRUN;
+        Srb->SrbStatus = (UCHAR)Status;
+  
+        AtaXNotification(RequestComplete, AtaXChannelFdoExtension, Srb);
+  
+        AtaXChannelFdoExtension->WordsLeft  = 0;
+        AtaXChannelFdoExtension->CurrentSrb = NULL;
+  
+        AtaXNotification(NextRequest, AtaXChannelFdoExtension, NULL);
+      }
+    }
+    else
+    {
+      //PortInterruptStatus.AsULONG == 0
+      return FALSE;
+    }
+
+    AhciInterruptStatus = 1 << AtaXChannelFdoExtension->AhciInterface->AhciChannel;
+    WRITE_REGISTER_ULONG((PULONG)&AtaXChannelFdoExtension->AhciInterface->Abar->InterruptStatus, AhciInterruptStatus);
+
+    AhciControl = TRUE;
+
+    //DPRINT("InterruptRoutine: return TRUE\n");
+    return TRUE;
+  }
+
+  if ( AtaXChannelFdoExtension->SataInterface.SataBaseAddress )
+    SataMode = TRUE;
+  else
+    SataMode = FALSE;
+
   if ( AtaXChannelFdoExtension->BusMaster )
   {
-    BusMasterStatus = BusMasterInterface->BusMasterReadStatus(
-                                BusMasterInterface->ChannelPdoExtension);
-
+    BusMasterStatus = BusMasterInterface->BusMasterReadStatus(BusMasterInterface->ChannelPdoExtension);
     DPRINT(" InterruptRoutine:  BusMasterReadStatus - %x \n",  BusMasterStatus);
-    // Interrupt bit. When this bit is read as a one,
-    // all data transfered from the drive is visible in system memory
+    //Interrupt bit. When this bit is read as a one, all data transfered from the drive is visible in system memory
     if ( BusMasterStatus & 4 )
     {
       BusMasterInterface->BusMasterStop(BusMasterInterface->ChannelPdoExtension);
@@ -825,8 +875,11 @@ InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
   if ( !Srb )
   {
     DPRINT("InterruptRoutine: CurrentSrb is NULL\n");
-    // считываем регистр состояния и сбрасываем прерывание
-    StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+    if ( AhciControl == FALSE )
+    {
+      // считываем регистр состояния и сбрасываем прерывание
+      StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+    }
     return Result;
   }
 
@@ -838,17 +891,12 @@ InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
 
   if ( !(AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_USE_DMA) )
   {
-    BusMasterStatus = BusMasterInterface->BusMasterReadStatus(
-                               BusMasterInterface->ChannelPdoExtension);
+    BusMasterStatus = BusMasterInterface->BusMasterReadStatus(BusMasterInterface->ChannelPdoExtension);
 
-    DPRINT(" InterruptRoutine:  BusMasterReadStatus - %x \n",  BusMasterStatus);
-    // Interrupt bit. When this bit is read as a one,
-    // all data transfered from the drive is visible in system memory
+    //Interrupt bit. When this bit is read as a one, all data transfered from the drive is visible in system memory
     if ( BusMasterStatus & 4 )
-    {
       BusMasterInterface->BusMasterStop(BusMasterInterface->ChannelPdoExtension);
-    }
-  }
+ }
 
   if ( AtaXChannelFdoExtension->BusMaster )
   {
@@ -858,7 +906,6 @@ InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
 
   // считываем регистр состояния и сбрасываем прерывание
   StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
-  DPRINT1("InterruptRoutine: Entered with Status - %x\n", StatusByte);
 
   if ( StatusByte & IDE_STATUS_BUSY )
   {
@@ -875,7 +922,13 @@ InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
 
     if ( ix == 10 )
     {
-      DPRINT("InterruptRoutine: StatusByte & IDE_STATUS_BUSY. Status %x, Base IO %x\n", StatusByte, AtaXRegisters1);
+      //DPRINT("InterruptRoutine: StatusByte & IDE_STATUS_BUSY. Status %x, Base IO %x\n", StatusByte, AtaXRegisters1);
+
+      DPRINT("InterruptRoutine: FIXME AtaXNotification(RequestTimerCall(...\n");
+      //AtaXNotification(RequestTimerCall,
+      //                     AtaXChannelFdoExtension,
+      //                     AtapiCallBack,
+      //                     500);
       return TRUE;
     }
   }
@@ -891,26 +944,24 @@ InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
     }
   }
 
-  // причина прерывания
+  // причина этого прерывания
   if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )
   {
     // ATAPI устройство
     InterruptReason = (READ_PORT_UCHAR(AtaXRegisters1->InterruptReason) & 3);
-    //AtapiDevice = TRUE;
-    //WordsThisInterrupt = 256;
+    AtapiDevice = TRUE;
+    WordsThisInterrupt = 256;
   }
   else
   {
     // ATA устройство
     if ( BusMaster )
-    {
-       goto CompleteRequest;
-    }
+      goto CompleteRequest;
 
     if ( StatusByte & IDE_STATUS_DRQ )
     {
-      //if ( AtaXChannelFdoExtension->MaximumBlockXfer[Srb->TargetId] )
-      //  WordsThisInterrupt = 256 * AtaXChannelFdoExtension->MaximumBlockXfer[Srb->TargetId];
+      if ( AtaXChannelFdoExtension->MaximumBlockXfer[Srb->TargetId] )
+        WordsThisInterrupt = 256 * AtaXChannelFdoExtension->MaximumBlockXfer[Srb->TargetId];
 
       if ( Srb->SrbFlags & SRB_FLAGS_DATA_IN )
       {
@@ -944,21 +995,74 @@ InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
     }
   }
 
-  DPRINT("InterruptRoutine: InterruptReason - %x\n", InterruptReason);
+  //DPRINT("InterruptRoutine: InterruptReason - %x\n", InterruptReason);
 
   if ( InterruptReason == 1 && (StatusByte & IDE_STATUS_DRQ) )
   {
     // запись Atapi пакета
-    DPRINT("InterruptRoutine: Writing Atapi packet.\n");
-
     // отправляем CDB устройству
+    //DPRINT("InterruptRoutine: Writing Atapi packet.\n");
     WRITE_PORT_BUFFER_USHORT(AtaXRegisters1->Data, (PUSHORT)Srb->Cdb, 6);
     return TRUE;
   }
   else if ( InterruptReason == 0 && (StatusByte & IDE_STATUS_DRQ) )
   {
     // запись данных
-ASSERT(FALSE);
+    if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )  // Atapi
+    {
+      WordCount  = READ_PORT_UCHAR(AtaXRegisters1->ByteCountLow);
+      WordCount |= READ_PORT_UCHAR(AtaXRegisters1->ByteCountHigh) << 8;
+
+      WordCount >>= 1; // bytes --> words
+
+      //if ( WordCount != AtaXChannelFdoExtension->WordsLeft )
+        //DPRINT("InterruptRoutine: %d words requested; %d words xferred\n", AtaXChannelFdoExtension->WordsLeft, WordCount);
+
+      if ( WordCount > AtaXChannelFdoExtension->WordsLeft )
+           WordCount = AtaXChannelFdoExtension->WordsLeft;
+    }
+    else
+    {
+      // Ata
+      if ( AtaXChannelFdoExtension->WordsLeft < WordsThisInterrupt ) // сколько слов осталось передать?
+         WordCount = AtaXChannelFdoExtension->WordsLeft;             // меньше чем сектор (512/2) - только запрашиваемые
+      else
+         WordCount = WordsThisInterrupt;                             // целый сектор
+    }
+
+    // убеждаемся, что команда действительно записи
+    if ( Srb->SrbFlags & SRB_FLAGS_DATA_OUT )
+    {
+      //DPRINT("InterruptRoutine: Write interrupt\n");
+
+      if ( SataMode )
+        AtaXSataWaitOnBusy(AtaXRegisters1);
+      else
+        AtaXWaitOnBusy(AtaXRegisters2);
+
+      if ( AtapiDevice || !AtaXChannelFdoExtension->DWordIO )
+      {
+        //DPRINT("InterruptRoutine: WRITE_PORT_BUFFER_USHORT %x, DataBuffer - %x, WordCount - %x\n", AtaXRegisters1->Data, AtaXChannelFdoExtension->DataBuffer, WordCount);
+        WRITE_PORT_BUFFER_USHORT(AtaXRegisters1->Data, AtaXChannelFdoExtension->DataBuffer, WordCount);
+        //DPRINT("InterruptRoutine: WRITE_PORT_BUFFER_USHORT ok\n");
+      }
+      else
+      {
+        DPRINT("InterruptRoutine: FIXME DWordIO()\n");
+      }
+    }
+    else
+    {
+      // и как мы сюда попали?
+      DPRINT1("InterruptRoutine: Interrupt reason %x, but Srb is for a write %x.\n", InterruptReason, Srb);
+      Status = SRB_STATUS_ERROR;
+      goto CompleteRequest;
+    }
+
+    // корректируем адрес буфера данных и кол-во оставшихся для записи слов
+    AtaXChannelFdoExtension->DataBuffer += WordCount;
+    AtaXChannelFdoExtension->WordsLeft -= WordCount;
+    //DPRINT("InterruptRoutine: WordsLeft - %x\n", AtaXChannelFdoExtension->WordsLeft);
     return TRUE;
   }
   else if ( InterruptReason == 2 && (StatusByte & IDE_STATUS_DRQ) )
@@ -967,43 +1071,43 @@ ASSERT(FALSE);
 
     if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )
     {
-      // чтение данных ATAPI
-
+      // чтение Atapi - данных
       WordCount = READ_PORT_UCHAR(AtaXRegisters1->ByteCountLow);
       WordCount |= READ_PORT_UCHAR(AtaXRegisters1->ByteCountHigh) << 8;
 
       WordCount >>= 1; // bytes --> words
 
       //if ( WordCount != AtaXChannelFdoExtension->WordsLeft )
-      //  DPRINT("InterruptRoutine: %d words requested; %d words xferred\n", AtaXChannelFdoExtension->WordsLeft, WordCount);
+        //DPRINT("InterruptRoutine: %d words requested; %d words xferred\n", AtaXChannelFdoExtension->WordsLeft, WordCount);
 
       if ( WordCount > AtaXChannelFdoExtension->WordsLeft )
         WordCount = AtaXChannelFdoExtension->WordsLeft;
     }
     else
     {
-      // чтение данных ATA
-
-      // сколько слов осталось передать
-      if ( AtaXChannelFdoExtension->WordsLeft < WordsThisInterrupt )
-        WordCount = AtaXChannelFdoExtension->WordsLeft;
+      // чтение данных Ata
+      if ( AtaXChannelFdoExtension->WordsLeft < WordsThisInterrupt )  // сколько слов осталось передать?
+        WordCount = AtaXChannelFdoExtension->WordsLeft;               // меньше чем сектор (512/2) - только запрашиваемые
       else
-        WordCount = WordsThisInterrupt;
+        WordCount = WordsThisInterrupt;                               // целый сектор
     }
 
     // убеждаемся, что команда действительно чтения
     if ( Srb->SrbFlags & SRB_FLAGS_DATA_IN )
     {
-      //DPRINT("InterruptRoutine: Read interrupt\n");
+      DPRINT("InterruptRoutine: Read interrupt\n");
 
-      AtaXWaitOnBusy(AtaXRegisters2);
+      if ( SataMode )
+        AtaXSataWaitOnBusy(AtaXRegisters1);
+      else
+        AtaXWaitOnBusy(AtaXRegisters2);
 
       if ( AtapiDevice || !AtaXChannelFdoExtension->DWordIO )
       {
         READ_PORT_BUFFER_USHORT(AtaXRegisters1->Data, AtaXChannelFdoExtension->DataBuffer, WordCount);
         //DPRINT("InterruptRoutine: READ_PORT_BUFFER_USHORT %x, DataBuffer - %x, WordCount - %x\n", AtaXRegisters1->Data, AtaXChannelFdoExtension->DataBuffer, WordCount);
 
-        //DPRINT("InterruptRoutine: Srb->Cdb[0]- %x\n", Srb->Cdb[0]);
+        DPRINT("InterruptRoutine: Srb->Cdb[0]- %x\n", Srb->Cdb[0]);
         if ( Srb->Cdb[0] == SCSIOP_REQUEST_SENSE )
         {
           DPRINT("InterruptRoutine: Srb->DataTransferLength - %x\n", Srb->DataTransferLength);
@@ -1049,15 +1153,16 @@ ASSERT(FALSE);
     else
     {
       // и как мы сюда попали?
-      DPRINT("InterruptRoutine: Interrupt reason %x, but Srb is for a read %x.\n", InterruptReason, Srb);
+      DPRINT1("InterruptRoutine: Interrupt reason %x, but Srb is for a read %x.\n", InterruptReason, Srb);
       Status = SRB_STATUS_ERROR;
       goto CompleteRequest;
     }
 
+    // переводим данные ATAPI назад в SCSI данные, если это необходимо 
     if ( Srb->Cdb[0] == ATAPI_MODE_SENSE &&
          AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )
     {
-      //конвертируем Atapi -> Scsi и корректируем WordCount
+      //конвертируем и корректируем WordCount
       WordCount -= Atapi2Scsi(Srb, (char *)AtaXChannelFdoExtension->DataBuffer, WordCount << 1);
     }
 
@@ -1065,7 +1170,7 @@ ASSERT(FALSE);
     AtaXChannelFdoExtension->DataBuffer += WordCount;
     AtaXChannelFdoExtension->WordsLeft -= WordCount;
 
-    // проверяем все ли данные прочитаны
+    // проверяем что все данные прочитаны
     if ( AtaXChannelFdoExtension->WordsLeft == 0 )
     {
       if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )  // Atapi
@@ -1081,9 +1186,11 @@ ASSERT(FALSE);
 
           AtaXChannelFdoExtension->DataBuffer -= WordCount;
 
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer - %p, *DataBuffer - %x\n", AtaXChannelFdoExtension->DataBuffer, *(PULONG)AtaXChannelFdoExtension->DataBuffer);
           if ( AtaXChannelFdoExtension->DataBuffer[0] == 0 )
             *((ULONG *) &(AtaXChannelFdoExtension->DataBuffer[0]) ) = 0xFFFFFF7F;
 
+          DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer - %p, *DataBuffer - %x\n", AtaXChannelFdoExtension->DataBuffer, *(PULONG)AtaXChannelFdoExtension->DataBuffer);
           *((ULONG *) &(AtaXChannelFdoExtension->DataBuffer[2])) = 0x00080000;
 
           DPRINT("InterruptRoutine: AtaXChannelFdoExtension->DataBuffer - %p, *DataBuffer - %x\n", AtaXChannelFdoExtension->DataBuffer, *(PULONG)AtaXChannelFdoExtension->DataBuffer);
@@ -1098,7 +1205,7 @@ ASSERT(FALSE);
         else
           Status = SRB_STATUS_SUCCESS;
 
-        DPRINT("InterruptRoutine: Read interrupt goto CompleteRequest. Status - %x\n", Status);
+        //DPRINT("InterruptRoutine: Read interrupt goto CompleteRequest. Status - %x\n", Status);
         goto CompleteRequest;
       }
     }
@@ -1121,8 +1228,37 @@ CompleteRequest:
 
     if ( BusMaster )
     {
-ASSERT(FALSE);
-       DPRINT("InterruptRoutine: Status - %x\n", Status);
+      AtaXChannelFdoExtension->WordsLeft = 0;
+
+      // See 3.1. Status Bit Interpretation ("Programming Interface for Bus Master IDE Controller")
+
+      /* Interrupt:  This bit is set by the rising edge of the IDE interrupt line.  This bit is cleared when a
+         '1' is written to it by software.  Software can use this bit to determine if an IDE device has
+         asserted its interrupt line. When this bit is read as a one, all data transfered from the drive is
+         visible in system memory. */
+
+      if ( BusMasterStatus & 4 )
+        Status = SRB_STATUS_SUCCESS;
+
+
+      /* Error: This bit is set when the controller encounters an error in transferring data to/from
+         memory. The exact error condition is bus specific and can be determined in a bus specific
+         manner. This bit is cleared when a '1' is written to it by software. */
+
+      if ( BusMasterStatus & 2 )
+        Status = SRB_STATUS_ERROR;
+
+
+      /* Bus Master IDE Active: This bit is set when the Start bit is written to the Command  register.
+         This bit is cleared when the last transfer for a region is performed, where EOT for that region is
+         set in the region descriptor. It is also cleared when the Start bit is cleared in the Command
+         register.  When this bit is read as a zero, all data transfered from the drive during the previous
+         bus master command is visible in system memory, unless the bus master command was aborted. */
+
+      if ( BusMasterStatus & 1 )
+        Status = SRB_STATUS_DATA_OVERRUN;
+
+      DPRINT("InterruptRoutine: Status - %x\n", Status);
     }
 
     if ( Status == SRB_STATUS_ERROR )  // ошибка
@@ -1137,8 +1273,21 @@ ASSERT(FALSE);
       // подождем если занято
       for ( ix = 0; ix < 30; ix++ )
       {
-        StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);  // Считываем альтернативный регистр состояния
-        DPRINT("AtaXIssueIdentify: Status (AlternateStatus) before read words - %x\n", StatusByte);
+        if ( SataMode )
+        {
+          // Считываем альтернативный регистр состояния
+          StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+          DPRINT("AtaXIssueIdentify: Status (AlternateStatus) before read words - %x\n", StatusByte);
+          // Считываем  регистр состояния
+          StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+          DPRINT("AtaXIssueIdentify: Status before read words - %x\n", StatusByte);
+        }
+        else
+        {
+          // Считываем альтернативный регистр состояния
+          StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+          DPRINT("AtaXIssueIdentify: Status (AlternateStatus) before read words - %x\n", StatusByte);
+        }
 
         if ( !(StatusByte & IDE_STATUS_BUSY) )
           break;
@@ -1159,8 +1308,21 @@ ASSERT(FALSE);
       {
         for ( ix = 0; ix < 500; ix++ )
         {
-          StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);  // Считываем альтернативный регистр состояния
-          DPRINT("AtaXIssueIdentify: Status (AlternateStatus) before read words - %x\n", StatusByte);
+          if ( SataMode )
+          {
+            // Считываем альтернативный регистр состояния
+            StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+            DPRINT("AtaXIssueIdentify: Status (AlternateStatus) before read words - %x\n", StatusByte);
+            // Считываем  регистр состояния
+            StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+            DPRINT("AtaXIssueIdentify: Status before read words - %x\n", StatusByte);
+          }
+          else
+          {
+            // Считываем альтернативный регистр состояния
+            StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+            DPRINT("AtaXIssueIdentify: Status (AlternateStatus) before read words - %x\n", StatusByte);
+          }
 
           if ( !(StatusByte & IDE_STATUS_DRQ) )
             break;
@@ -1230,7 +1392,8 @@ ASSERT(FALSE);
           cmdOutParameters->cBufferSize = 8;
         }
 
-        AtaXNotification(RequestComplete, AtaXChannelFdoExtension, Srb);  // команда завершена
+        // команда завершена
+        AtaXNotification(RequestComplete, AtaXChannelFdoExtension, Srb);
       }
     }
     else
@@ -1238,7 +1401,8 @@ ASSERT(FALSE);
       DPRINT("InterruptRoutine: No SRB!\n");
     }
 
-    if ( !(AtaXChannelFdoExtension->RDP) )  // готовность к следующему запросу
+    // готовность к следующему запросу
+    if ( !(AtaXChannelFdoExtension->RDP) )
     {
       AtaXChannelFdoExtension->CurrentSrb = NULL;
       AtaXNotification(NextRequest, AtaXChannelFdoExtension, NULL);
@@ -1254,7 +1418,7 @@ ASSERT(FALSE);
   }
   else
   {
-    // неожидаемое прерывание
+    // неожиданное прерывание
     DPRINT("InterruptRoutine: Unexpected interrupt. InterruptReason %x. Status %x.\n", InterruptReason, StatusByte);
     return FALSE;
   }
