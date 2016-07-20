@@ -6,6 +6,22 @@
 #include <srb.h>
 
 
+//-------------------------------------------------
+
+typedef struct _AHCI_PRD {
+
+  ULONG  DataBaseAddress;             // DBA   Indicates the 32-bit physical address of the data block. The block must be word aligned, indicated by bit 0 being reserved.
+  ULONG  DataBaseAddressU;            // DBAU  This is the upper 32-bits of the data block physical address. It is only valid if the HBA indicated that it can support 64-bit addressing through the S64A bit in the capabilities register, and is ignored otherwise.
+  ULONG  Reserved0;
+
+  struct {
+    ULONG  DataByteCount         :22; // DBC  A С0Т based value that Indicates the length, in bytes, of the data block. A maximum of length of 4MB may exist for any entry. Bit С0Т of this field must always be С1Т to indicate an even byte count. A value of С1Т indicates 2 bytes, С3Т indicates 4 bytes, etc.
+    ULONG  Reserved1             :9;
+    ULONG  InterruptOnCompletion :1;  // I    When set, indicates that hardware should assert an interrupt when the data block for this entry has transferred, which means that no data is in the HBA hardware. Data may still be in flight to system memory (disk reads), or at the device (an R_OK or R_ERR has yet to be received). The HBA shall set the PxIS.DPS bit after completing the data transfer, and if enabled, generate an interrupt.
+  };
+
+} AHCI_PRD, *PAHCI_PRD;
+
 typedef struct _AHCI_PRDT {  // 128 byte - aligned (0x0080)
   AHCI_PRD Descriptor[32];  // дл€ 128 кЅ (0x20000) должно хватить?(может +1?) ≈сли добавл€ть ещЄ один AHCI_PRD (а это 16 байт), то надо добивать +112 байт (128 byte - aligned)
 } AHCI_PRDT, *PAHCI_PRDT;
