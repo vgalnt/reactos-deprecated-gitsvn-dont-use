@@ -274,6 +274,80 @@ AtaXQueryBusMasterInterface(IN PDEVICE_OBJECT AtaXChannelFdo)
   return Status;
 }
 
+NTSTATUS
+AtaXQuerySataInterface(IN PDEVICE_OBJECT AtaXChannelFdo)
+{
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  KEVENT                  Event;
+  NTSTATUS                Status;
+  PIRP                    Irp;
+  IO_STATUS_BLOCK         IoStatus;
+  PIO_STACK_LOCATION      Stack;
+
+  DPRINT("AtaXQuerySataInterface: ... \n");
+
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXChannelFdo->DeviceExtension;
+
+  KeInitializeEvent(&Event, NotificationEvent, FALSE);
+
+  Irp = IoBuildSynchronousFsdRequest(
+            IRP_MJ_PNP,
+            AtaXChannelFdoExtension->CommonExtension.LowerDevice,
+            NULL,
+            0,
+            NULL,
+            &Event,
+            &IoStatus);
+
+  if ( Irp == NULL )
+    return STATUS_INSUFFICIENT_RESOURCES; // no memory
+
+  Stack = IoGetNextIrpStackLocation(Irp);
+
+  Stack->MajorFunction = IRP_MJ_PNP;
+  Stack->MinorFunction = IRP_MN_QUERY_INTERFACE;
+
+  Stack->Parameters.QueryInterface.Size = 9; // тип интерфейса = AtaXQuerySataInterface
+  Stack->Parameters.QueryInterface.InterfaceType = (LPGUID)&GUID_BUS_INTERFACE_STANDARD;
+  Stack->Parameters.QueryInterface.Version = 1; //не используется
+  Stack->Parameters.QueryInterface.Interface = (PINTERFACE)&AtaXChannelFdoExtension->SataInterface;
+  Stack->Parameters.QueryInterface.InterfaceSpecificData = NULL; //не используется
+
+  DPRINT("AtaXQuerySataInterface: AtaXChannelFdoExtension->SataInterface.SataBaseAddress - %p\n", AtaXChannelFdoExtension->SataInterface.SataBaseAddress);
+
+  Irp->IoStatus.Status = STATUS_NOT_SUPPORTED;
+
+  Status = IoCallDriver(AtaXChannelFdoExtension->CommonExtension.LowerDevice, Irp);  // call pciide, or ahcix, or ... 
+
+  if ( Status == STATUS_PENDING )
+  {
+    KeWaitForSingleObject(&Event, Executive, KernelMode, FALSE, NULL);
+    Status = IoStatus.Status;
+  }
+
+  DPRINT("AtaXQuerySataInterface: AtaXChannelFdoExtension->SataInterface.SataBaseAddress - %p\n", AtaXChannelFdoExtension->SataInterface.SataBaseAddress);
+
+  if ( NT_SUCCESS(Status) )
+  {
+    PSATA_INTERFACE  SataInterface = &AtaXChannelFdoExtension->SataInterface;
+
+    DPRINT("AtaXQuerySataInterface: SataInterface       - %p \n", SataInterface);
+
+    DPRINT("AtaXQuerySataInterface: ChannelPdoExtension - %p \n", SataInterface->ChannelPdoExtension);
+    DPRINT("AtaXQuerySataInterface: SataBaseAddress     - %p \n", SataInterface->SataBaseAddress);
+    DPRINT("AtaXQuerySataInterface: InterruptResource   - %p \n", SataInterface->InterruptResource);
+
+    DPRINT("AtaXQuerySataInterface: InterruptResource->InterruptShareDisposition - %x \n", SataInterface->InterruptResource->InterruptShareDisposition);
+    DPRINT("AtaXQuerySataInterface: InterruptResource->InterruptFlags            - %x \n", SataInterface->InterruptResource->InterruptFlags);
+    DPRINT("AtaXQuerySataInterface: InterruptResource->InterruptLevel            - %x \n", SataInterface->InterruptResource->InterruptLevel);
+    DPRINT("AtaXQuerySataInterface: InterruptResource->InterruptVector           - %x \n", SataInterface->InterruptResource->InterruptVector);
+    DPRINT("AtaXQuerySataInterface: InterruptResource->InterruptObject           - %p \n", SataInterface->InterruptResource->InterruptObject);
+  }
+
+  DPRINT("AtaXQuerySataInterface: return Status - %x\n", Status);
+  return Status;
+}
+
 NTSTATUS 
 AtaXParseTranslatedResources(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,

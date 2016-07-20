@@ -279,6 +279,7 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
   // Interfaces
   PBUS_INTERFACE_STANDARD  BusInterface;
   BUS_MASTER_INTERFACE     BusMasterInterface;
+  SATA_INTERFACE           SataInterface;
 
   // IoConnectInterrupt() 
   PKINTERRUPT              InterruptObject;
