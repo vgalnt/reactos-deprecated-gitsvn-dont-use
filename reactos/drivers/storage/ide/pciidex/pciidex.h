@@ -4,6 +4,7 @@
 #include <ntifs.h>
 #include <ide.h>
 #include <..\bmaster.h>
+#include <..\sata.h>
 
 
 #define PRIMARY_CHANNEL		0x00
@@ -33,6 +34,8 @@ typedef struct _FDO_DEVICE_EXTENSION
 
 	PHYSICAL_ADDRESS BusMasterPortBase;
 	ULONG BusMasterBase;
+	ULONG SataBaseAddress;
+	SATA_INTERRUPT_RESOURCE InterruptResource;
 	PDEVICE_OBJECT LowerDevice;
 	PDEVICE_OBJECT Pdo[MAX_IDE_CHANNEL];
 	USHORT VendorId;

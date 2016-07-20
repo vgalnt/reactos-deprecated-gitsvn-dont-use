@@ -551,9 +551,33 @@ PciIdeXPdoPnpDispatch(
 						Status = STATUS_NOT_SUPPORTED;
 						break;
 
-					case 9: // QuerySataInterface
+					case 9: //QuerySataInterface
 						DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QuerySataInterface.\n");
-						ASSERT(FALSE);
+						if (FdoDeviceExtension->SataBaseAddress)
+						{
+							PSATA_INTERFACE SataInterface;
+
+							DPRINT("QuerySataInterface: SataBaseAddress - %p\n", FdoDeviceExtension->SataBaseAddress);
+
+							SataInterface = (PSATA_INTERFACE)Stack->Parameters.QueryInterface.Interface;
+							SataInterface->Size = sizeof(SATA_INTERFACE);
+							DPRINT("QuerySataInterface: SataInterface->Size - %x\n", SataInterface->Size);
+
+							SataInterface->ChannelPdoExtension = DeviceExtension;
+							DPRINT("QuerySataInterface: SataInterface->ChannelPdoExtension - %p \n", SataInterface->ChannelPdoExtension);
+
+							SataInterface->SataBaseAddress     = FdoDeviceExtension->SataBaseAddress;
+							DPRINT("QuerySataInterface: SataInterface->SataBaseAddress     - %p \n", SataInterface->SataBaseAddress);
+
+							SataInterface->InterruptResource   = &FdoDeviceExtension->InterruptResource;
+							DPRINT("QuerySataInterface: SataInterface->InterruptResource   - %p \n", SataInterface->InterruptResource);
+
+							Status = STATUS_SUCCESS;
+						}
+						else
+						{
+							Status = STATUS_NOT_IMPLEMENTED;
+						}
 						break;
 
 					default:

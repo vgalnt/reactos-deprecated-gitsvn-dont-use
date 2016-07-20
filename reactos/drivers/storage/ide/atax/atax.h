@@ -15,6 +15,7 @@
 #include <initguid.h>
 #include <wdmguid.h>
 #include <..\bmaster.h>
+#include <..\sata.h>
 
 
 //
