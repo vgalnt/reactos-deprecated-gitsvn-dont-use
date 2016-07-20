@@ -6,6 +6,17 @@
 #include <srb.h>
 
 
+typedef struct _AHCI_COMMAND_HEADER {
+
+  AHCI_DESCRIPTION_INFORMATION  DescriptionInformation;   //0 DI 
+  ULONG                         PRDTByteCount;            //1 PRDBC  Command Status. Physical Region Descriptor Byte Count: Indicates the current byte count that has transferred on device writes (system memory to device) or device reads (device to system memory).
+  PAHCI_COMMAND_TABLE           CmdTableDescriptorBase;   //2 CTBA   Command Table Base Address. Indicates the 32-bit physical address of the command table, which contains the command FIS, ATAPI Command, and PRD table. This address must be aligned to a 128-byte cache line, indicated by bits 06:00 being reserved.
+  ULONG                         CmdTableDescriptorBaseU;  //3 CTBAU  Command Table Base Address Upper.  This is the upper 32-bits of the Command Table Base. It is only valid if the HBA indicated that it can support 64-bit addressing through the S64A bit in the capabilities register, and is ignored otherwise.
+
+  ULONG                         Reserved[4];              //4 ... 7
+
+} AHCI_COMMAND_HEADER, *PAHCI_COMMAND_HEADER; 
+
 typedef struct _AHCI_COMMAND_LIST {        // 1024 byte - aligned (0x0400)
   AHCI_COMMAND_HEADER Header[32];
 } AHCI_COMMAND_LIST, *PAHCI_COMMAND_LIST; 
