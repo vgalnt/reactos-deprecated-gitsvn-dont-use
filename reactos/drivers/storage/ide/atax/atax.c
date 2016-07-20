@@ -361,7 +361,16 @@ AtaReadWrite(
 
   DPRINT("AtaReadWrite: ... \n");
 
-  DeviceNumber = Srb->TargetId & 1;
+  if ( AtaXChannelFdoExtension->SataInterface.SataBaseAddress )
+  {
+    //SataMode = TRUE;
+    DeviceNumber = 0;
+  }
+  else
+  {
+    //SataMode = FALSE;
+    DeviceNumber = Srb->TargetId & 1;
+  }
 
   IdentifyData = &AtaXChannelFdoExtension->FullIdentifyData[DeviceNumber];
 
