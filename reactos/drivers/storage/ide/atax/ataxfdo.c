@@ -1984,7 +1984,8 @@ AtaXChannelFdoStartDevice(
     if ( NT_SUCCESS(Status) )
     {
        // Разрешаем прерывания
-       WRITE_PORT_UCHAR(AtaXChannelFdoExtension->BaseIoAddress2.DeviceControl, 0); //Bit 1 (nIEN): 0 - Enable Interrupt, 1 - Disable Interrupt
+       // Bit 1 (nIEN): 0 - Enable Interrupt, 1 - Disable Interrupt
+       WRITE_PORT_UCHAR(AtaXChannelFdoExtension->BaseIoAddress2.DeviceControl, 0);
 
        KeInitializeSpinLock(&AtaXChannelFdoExtension->SpinLock);
 
@@ -1992,15 +1993,20 @@ AtaXChannelFdoStartDevice(
                        (PKDEFERRED_ROUTINE)AtaXDpc,
                        AtaXChannelFdo);
 
-       AtaXChannelFdoExtension->Flags |= ATAX_DISCONNECT_ALLOWED;  // set flag that it's allowed to disconnect during this command
+       // set flag that it's allowed to disconnect during this command
+       AtaXChannelFdoExtension->Flags |= ATAX_DISCONNECT_ALLOWED;
 
        if ( AtaXChannelFdoExtension->ChannelState == ChannelDisabled )
        {
-         Status = AtaXQueryControllerProperties(AtaXChannelFdo);  // запрос конфигурационной информации IDE контроллера
-         DPRINT("AtaXChannelFdoStartDevice: AtaXQueryControllerProperties return Status - %x\n", Status);
+         if ( !AtaXChannelFdoExtension->AhciInterface ) // AtaXChannelFdoExtension->AhciInterface->Abar ?
+         {
+           // запрос конфигурационной информации IDE контроллера
+           Status = AtaXQueryControllerProperties(AtaXChannelFdo);
+           DPRINT("AtaXChannelFdoStartDevice: AtaXQueryControllerProperties return Status - %p\n", Status);
 
-         Status = AtaXQueryBusMasterInterface(AtaXChannelFdo);
-         DPRINT("AtaXChannelFdoStartDevice: AtaXQueryBusMasterInterface return Status - %x\n", Status);
+           Status = AtaXQueryBusMasterInterface(AtaXChannelFdo);
+           DPRINT("AtaXChannelFdoStartDevice: AtaXQueryBusMasterInterface return Status - %p\n", Status);
+         }
 
          AtaXChannelFdoExtension->ChannelState = ChannelEnabled;
        }
@@ -2009,9 +2015,14 @@ AtaXChannelFdoStartDevice(
        Status = AtaXCreateSymLinks(AtaXChannelFdoExtension);
     }
   }
-else
+
+  // Если не подключились к прерыванию ...
+  if ( !NT_SUCCESS(Status) )
   {
-ASSERT(FALSE);
+     AtaXChannelFdoExtension->InterruptObject = 0;
+     //AtaXRemoveChannelFdo(AtaXChannelFdoExtension);
+     DPRINT("AtaXChannelFdoStartDevice - FIXME AtaXRemoveChannelFdo() \n" );
+     ASSERT(FALSE);
   }
 
   Irp->IoStatus.Information = 0;
