@@ -135,6 +135,26 @@ AtaXSoftReset(
   KeStallExecutionProcessor(500);
 }
 
+VOID NTAPI 
+AtaXSataSoftReset(
+    IN PATAX_REGISTERS_1 AtaXRegisters1,
+    IN ULONG DeviceNumber)
+{
+  ULONG ix = 1000*1000;
+  
+  WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect,(UCHAR)(((DeviceNumber & 1) << 4) | IDE_DRIVE_SELECT));
+  KeStallExecutionProcessor(500);
+ 
+  WRITE_PORT_UCHAR(AtaXRegisters1->Command, IDE_COMMAND_ATAPI_RESET);
+  
+  while ((READ_PORT_UCHAR(AtaXRegisters1->Status) & IDE_STATUS_BUSY) && ix--)
+    KeStallExecutionProcessor(25);
+  
+  WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect,(UCHAR)((DeviceNumber << 4) | IDE_DRIVE_SELECT));
+  AtaXSataWaitOnBusy(AtaXRegisters1);
+  KeStallExecutionProcessor(500);
+}
+
 ULONG 
 AtaXMapError(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
