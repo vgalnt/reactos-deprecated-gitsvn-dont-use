@@ -19,6 +19,33 @@ typedef enum {
 
 } FIS_TYPE;
 
+typedef struct _FIS_REGISTER_H2D {
+
+  UCHAR  FISType;                   // 0x27  FIS_TYPE_REGISTER_H2D
+  UCHAR  PortMultiplierPort :4;     // Port multiplier
+  UCHAR  Reserved0          :3;
+  UCHAR  RegisterType       :1;     // 1 - Command, 0 - Control
+  UCHAR  Command;                   // Contains the contents of the Command register of the Shadow Register Block
+  UCHAR  FeaturesLow;               // Feature register          7:0
+
+  UCHAR  LBA0;                      // LBA low register  7:0
+  UCHAR  LBA1;                      // LBA mid register  15:8
+  UCHAR  LBA2;                      // LBA high register 23:16
+  UCHAR  Device;                    // Device register
+
+  UCHAR  LBA3;                      // LBA register      31:24
+  UCHAR  LBA4;                      // LBA register      39:32
+  UCHAR  LBA5;                      // LBA register      47:40
+  UCHAR  FeaturesHigh;              // Feature register          15:8
+
+  UCHAR  CountLow;                  // Count register   7:0
+  UCHAR  CountHigh;                 // Count register  15:8
+  UCHAR  IsochronousCmdCompletion;  // ICC 
+  UCHAR  Control;                   // Control register
+
+  UCHAR  Reserved[4];
+
+} FIS_REGISTER_H2D, *PFIS_REGISTER_H2D;
 
 //-------------------------------------------------
 
