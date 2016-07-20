@@ -6,6 +6,19 @@
 #include <srb.h>
 
 
+typedef union _AHCI_SATA_STATUS {
+
+  struct {
+    ULONG  DeviceDetection          :4;  // Indicates the interface device detection and Phy state (0,1,3,4)
+    ULONG  CurrentInterfaceSpeed    :4;  // Indicates the negotiated interface communication speed (0,1,2,3)
+    ULONG  InterfacePowerManagement :4;  // Indicates the current interface state (0,1,2,6)
+    ULONG  Reserved                 :20;
+  };
+
+  ULONG AsULONG;
+
+} AHCI_SATA_STATUS, *PAHCI_SATA_STATUS;
+
 typedef union _AHCI_PORT_COMMAND {
 
   struct {
