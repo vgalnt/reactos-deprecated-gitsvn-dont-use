@@ -115,6 +115,28 @@ typedef struct _FIS_DATA {
 
 } FIS_DATA, *PFIS_DATA;
 
+typedef struct _FIS_BIST_ACTIVATE { // fixme - rename fields
+
+  UCHAR  FISType;                   // 0x58  FIS_TYPE_BIST_ACTIVATE
+
+  UCHAR  PortMultiplierPort :4;     // Port multiplier
+  UCHAR  Reserved0          :4;
+
+  UCHAR  V :1;
+  UCHAR  R :1;
+  UCHAR  P :1;
+  UCHAR  F :1;
+  UCHAR  L :1;
+  UCHAR  S :1;
+  UCHAR  A :1;
+  UCHAR  T :1;
+
+  UCHAR  Reserved1;
+
+  ULONG Data[2];
+
+} FIS_BIST_ACTIVATE, *PFIS_BIST_ACTIVATE;
+
 //-------------------------------------------------
 
 typedef struct _AHCI_PRD {
