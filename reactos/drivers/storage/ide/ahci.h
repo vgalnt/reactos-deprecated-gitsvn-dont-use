@@ -6,6 +6,36 @@
 #include <srb.h>
 
 
+typedef union _AHCI_PORT_INTERRUPT_STATUS {
+
+  struct {
+    ULONG  FisRegisterD2HInterrupt    :1;  // DHRS  A D2H Register FIS has been received with the ‘I’ bit set, and has been copied into system memory.
+    ULONG  FisPioSetupInterrupt       :1;  // PSS   A PIO Setup FIS has been received with the ‘I’ bit set, it has been copied into system memory, and the data related to that FIS has been transferred. This bit shall be set even if the data transfer resulted in an error.
+    ULONG  FisDmaSetupInterrupt       :1;  // DSS   A DMA Setup FIS has been received with the ‘I’ bit set and has been copied into system memory.
+    ULONG  FisSetDeviceBitsInterrupt  :1;  // SDBS  A Set Device Bits FIS has been received with the ‘I’ bit set and has been copied into system memory.
+    ULONG  FisUnknownInterrupt        :1;  // UFS   When set to ‘1’, indicates that an unknown FIS was received and has been copied into system memory. This bit is cleared to ‘0’ by software clearing the PxSERR.DIAG.F bit to ‘0’. Note that this bit does not directly reflect the PxSERR.DIAG.F bit. PxSERR.DIAG.F is set immediately when an unknown FIS is detected, whereas this bit is set when that FIS is posted to memory. Software should wait to act on an unknown FIS until this bit is set to ‘1’ or the two bits may become out of sync.
+    ULONG  DescriptorProcessed        :1;  // DPS   A PRD with the ‘I’ bit set has transferred all of its data.
+    ULONG  PortConnectChange          :1;  // PCS   1=Change in Current Connect Status. 0=No change in Current Connect Status. This bit reflects the state of PxSERR.DIAG.X. This bit is only cleared when PxSERR.DIAG.X is cleared.
+    ULONG  DeviceMechanicalPresence   :1;  // DMPS  When set, indicates that a mechanical presence switch associated with this port has been opened or closed, which may lead to a change in the connection state of the device. This bit is only valid if both CAP.SMPS and PxCMD.MPSP are set to ‘1’.
+
+    ULONG  Reserved0                  :14;
+    ULONG  PhyRdyChange               :1;  // PRCS  When set to ‘1’ indicates the internal PhyRdy signal changed state. This bit reflects the state of PxSERR.DIAG.N. To clear this bit, software must clear PxSERR.DIAG.N to ‘0’.
+    ULONG  IncorrectPortMultiplier    :1;  // IPMS  Indicates that the HBA received a FIS from a device that did not have a command outstanding. The IPMS bit may be set during enumeration of devices on a Port Multiplier due to the normal Port Multiplier enumeration process. It is recommended that IPMS only be used after enumeration is complete on the Port Multiplier. IPMS is not set when an asynchronous notification is received (a Set Device Bits FIS with the Notification ‘N’ bit set to ‘1’).
+
+    ULONG  Overflow                   :1;  // OFS   Indicates that the HBA received more bytes from a device than was specified in the PRD table for the command. 
+    ULONG  Reserved1                  :1;
+    ULONG  InterfaceNonFatalError     :1;  // INFS  Indicates that the HBA encountered an error on the Serial ATA interface but was able to continue operation.
+    ULONG  InterfaceFatalError        :1;  // IFS   Indicates that the HBA encountered an error on the Serial ATA interface which caused the transfer to stop.
+    ULONG  HostBusDataError           :1;  // HBDS  Indicates that the HBA encountered a data error (uncorrectable ECC / parity) when reading from or writing to system memory.
+    ULONG  HostBusFatalError          :1;  // HBFS  Indicates that the HBA encountered a host bus error that it cannot recover from, such as a bad software pointer. In PCI, such an indication would be a target or master abort.
+    ULONG  TaskFileError              :1;  // TFES  This bit is set whenever the status register is updated by the device and the error bit (bit 0 of the Status field in the received FIS) is set.
+    ULONG  ColdPortDetect             :1;  // CPDS  When set, a device status has changed as detected by the cold presence detect logic. This bit can either be set due to a non-connected port receiving a device, or a connected port having its device removed. This bit is only valid if the port supports cold presence detect as indicated by PxCMD.CPD set to ‘1’.
+  };
+
+  ULONG AsULONG;
+
+} AHCI_PORT_INTERRUPT_STATUS, *PAHCI_PORT_INTERRUPT_STATUS;
+
 typedef struct _AHCI_PORT_REGISTERS {
 
   PAHCI_COMMAND_LIST          CmdListBaseAddress;       // 0x00, PxCLB   Command List Base Address, 1024 byte - aligned
