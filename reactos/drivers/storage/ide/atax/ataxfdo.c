@@ -1788,7 +1788,7 @@ AtaXDpc(
       BusMasterInterface = &AtaXChannelFdoExtension->BusMasterInterface;
       DPRINT("AtaXDpc:  BusMasterInterface - %p\n", BusMasterInterface);
       if ( Srb->SrbFlags & SRB_FLAGS_USE_DMA )
-        ASSERT(FALSE);//BusMasterInterface->BusMasterComplete(BusMasterInterface->ChannelPdoExtension);
+        BusMasterInterface->BusMasterComplete(BusMasterInterface->ChannelPdoExtension);
     }
   }
 
