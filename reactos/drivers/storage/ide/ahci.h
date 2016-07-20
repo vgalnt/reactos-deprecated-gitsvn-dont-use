@@ -63,6 +63,10 @@ typedef struct _AHCI_INTERFACE {
   PAHCI_INTERRUPT_RESOURCE  InterruptResource;
   PAHCI_MEMORY_REGISTERS    Abar;
 
+  // port interface
+  ULONG                     Channel;                    // логический канал (порядковый номер)
+  ULONG                     AhciChannel;                // физический канал (Ports Implemented) (0 ... 31)
+
 
   PAHCI_START_IO            AhciStartIo;
   PAHCI_INTERRUPT           AhciInterrupt;
