@@ -806,6 +806,7 @@ AtaXDetectDevices(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension)
   UCHAR              SignatureDeviceNumber;
   BOOLEAN            DeviceResponded = FALSE;
   ULONG              ix;
+  BOOLEAN            SataMode;
 
   DPRINT("AtaXDetectDevices (%p)\n", AtaXChannelFdoExtension);
 
@@ -817,23 +818,74 @@ AtaXDetectDevices(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension)
   AtaXChannelFdoExtension->ExpectingInterrupt = FALSE;  // сбрасываем "ожидаемое прерывание"
   AtaXChannelFdoExtension->CurrentSrb         = NULL;   // нет текущего SRB
 
-  ix = MAX_IDE_DEVICE;
+  if ( AtaXChannelFdoExtension->SataInterface.SataBaseAddress )
+  {
+    SataMode = TRUE;
+    ix = 1;
+  }
+  else
+  {
+    SataMode = FALSE;
+    ix = MAX_IDE_DEVICE;
+  }
 
   // Поиск устройств на канале
   for ( DeviceNumber = 0; DeviceNumber < ix; DeviceNumber++ )
   {
-    // Выбираем устройство по номеру DeviceNumber
-    WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect,
-                    (UCHAR)(((DeviceNumber & 1) << 4) | IDE_DRIVE_SELECT));
+    if ( SataMode )
+    {
+      DPRINT("AtaXDetectDevices: *AtaXRegisters1 - %x\n", *(PULONG)AtaXRegisters1);
+      DPRINT("AtaXDetectDevices: *AtaXRegisters2 - %x\n", *(PULONG)AtaXRegisters2);
+  
+      DPRINT("AtaXDetectDevices: Data            - %x\n", READ_PORT_USHORT(AtaXRegisters1->Data));
+      DPRINT("AtaXDetectDevices: Error           - %x\n", READ_PORT_UCHAR(AtaXRegisters1->Error));
+      DPRINT("AtaXDetectDevices: InterruptReason - %x\n", READ_PORT_UCHAR(AtaXRegisters1->InterruptReason));
+      DPRINT("AtaXDetectDevices: LowLBA          - %x\n", READ_PORT_UCHAR(AtaXRegisters1->LowLBA));
+      DPRINT("AtaXDetectDevices: MidLBA          - %x\n", READ_PORT_UCHAR(AtaXRegisters1->MidLBA));
+      DPRINT("AtaXDetectDevices: HighLBA         - %x\n", READ_PORT_UCHAR(AtaXRegisters1->HighLBA));
+      DPRINT("AtaXDetectDevices: DriveSelect     - %x\n", READ_PORT_UCHAR(AtaXRegisters1->DriveSelect));
+      DPRINT("AtaXDetectDevices: SectorCount     - %x\n", READ_PORT_UCHAR(AtaXRegisters1->SectorCount));
+      DPRINT("AtaXDetectDevices: Status          - %x\n", READ_PORT_UCHAR(AtaXRegisters1->Status));
+      DPRINT("AtaXDetectDevices: AlternateStatus - %x\n", READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus));
+  
+      DPRINT("AtaXDetectDevices: SataBaseAddress - %x\n", AtaXChannelFdoExtension->SataInterface.SataBaseAddress);
+      DPRINT("AtaXDetectDevices: (PULONG)SataBaseAddress + 0 - %x\n", READ_REGISTER_ULONG((PULONG)AtaXChannelFdoExtension->SataInterface.SataBaseAddress + 0));
+      DPRINT("AtaXDetectDevices: (PULONG)SataBaseAddress + 1 - %x\n", READ_REGISTER_ULONG((PULONG)AtaXChannelFdoExtension->SataInterface.SataBaseAddress + 1));
+      DPRINT("AtaXDetectDevices: (PULONG)SataBaseAddress + 2 - %x\n", READ_REGISTER_ULONG((PULONG)AtaXChannelFdoExtension->SataInterface.SataBaseAddress + 2));
+      DPRINT("AtaXDetectDevices: (PULONG)SataBaseAddress + 3 - %x\n", READ_REGISTER_ULONG((PULONG)AtaXChannelFdoExtension->SataInterface.SataBaseAddress + 3));
+      DPRINT("AtaXDetectDevices: (PULONG)SataBaseAddress + 4 - %x\n", READ_REGISTER_ULONG((PULONG)AtaXChannelFdoExtension->SataInterface.SataBaseAddress + 4));
+      DPRINT("AtaXDetectDevices: BusMasterInterface.BusMasterBase - %x\n", AtaXChannelFdoExtension->BusMasterInterface.BusMasterBase);
+  
+    }
 
-    StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus); // Считываем альтернативный регистр состояния
-    DPRINT("AtaXDetectDevices: StatusByte - %x\n", StatusByte);
+    if ( SataMode )
+    {
+      // Считываем регистр состояния
+      StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+      DPRINT("AtaXDetectDevices: StatusByte - %x\n", StatusByte);
 
-    if ( StatusByte == 0xFF )
-      continue;
+      if ( StatusByte == 0x7F )
+        continue;
 
-    AtaXSoftReset(AtaXRegisters1, AtaXRegisters2, DeviceNumber); // Делаем программный сброс
-    AtaXWaitOnBusy(AtaXRegisters2);
+      // Делаем программный сброс
+      AtaXSataSoftReset(AtaXRegisters1, DeviceNumber);
+      AtaXSataWaitOnBusy(AtaXRegisters1);
+    }
+    else
+    {
+      // Выбираем устройство по номеру DeviceNumber
+      WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect, (UCHAR)(((DeviceNumber & 1) << 4) | IDE_DRIVE_SELECT));
+      // Считываем альтернативный регистр состояния
+      StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+      DPRINT("AtaXDetectDevices: StatusByte - %x\n", StatusByte);
+
+      if ( StatusByte == 0xFF )
+        continue;
+
+      // Делаем программный сброс
+      AtaXSoftReset(AtaXRegisters1, AtaXRegisters2, DeviceNumber);
+      AtaXWaitOnBusy(AtaXRegisters2);
+    }
 
     // После любого сброса или выполнения команды диагностики устройство 
     // в блоке командных регистров содержит сигнатуру, определяющую его тип
@@ -875,7 +927,10 @@ AtaXDetectDevices(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension)
         StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
         if ( StatusByte == IDE_STATUS_ERROR )
         {
-          AtaXSoftReset(AtaXRegisters1, AtaXRegisters2, DeviceNumber);    // Делаем программный сброс
+          if ( SataMode )
+            AtaXSataSoftReset(AtaXRegisters1, DeviceNumber);              // Делаем программный сброс
+          else
+            AtaXSoftReset(AtaXRegisters1, AtaXRegisters2, DeviceNumber);  // Делаем программный сброс
         }
 
         AtaXSendInquiry(AtaXChannelFdoExtension, DeviceNumber);
@@ -924,7 +979,10 @@ AtaXDetectDevices(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension)
         StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
         if ( StatusByte == IDE_STATUS_ERROR )
         {
-          AtaXSoftReset(AtaXRegisters1, AtaXRegisters2, DeviceNumber); // Делаем программный сброс
+          if ( SataMode )
+            AtaXSataSoftReset(AtaXRegisters1, DeviceNumber);              // Делаем программный сброс
+          else
+            AtaXSoftReset(AtaXRegisters1, AtaXRegisters2, DeviceNumber);  // Делаем программный сброс
         }
       }
       else
