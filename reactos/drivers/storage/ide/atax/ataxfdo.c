@@ -1867,10 +1867,39 @@ AtaXChannelFdoStartDevice(
   }
   DPRINT("AtaXChannelFdoStartDevice: IoCallDriver Status - %x\n", Status);
 
-  Status = AtaXQueryBusInterface(AtaXChannelFdo);
+  Status = AtaXQueryBusInterface(AtaXChannelFdo);                                              // запрос интерфейса шины
   DPRINT("AtaXChannelFdoStartDevice: AtaXQueryBusInterface return Status - %p\n", Status);
 
-  Status = AtaXParseTranslatedResources(AtaXChannelFdoExtension, ResourcesTranslated);
+  Status = AtaXQueryAhciInterface(AtaXChannelFdo);                                            // запрос интерфейса AHCI порта
+  DPRINT("AtaXChannelFdoStartDevice: AtaXQueryAhciInterface return Status - %p\n", Status);
+
+  if ( NT_SUCCESS(Status) && AtaXChannelFdoExtension->AhciInterface )
+  {
+    // AHCI controller
+    PAHCI_INTERRUPT_RESOURCE  InterruptResource;
+
+    InterruptResource = AtaXChannelFdoExtension->AhciInterface->InterruptResource;
+  
+    AtaXChannelFdoExtension->InterruptVector           = InterruptResource->InterruptVector;
+    AtaXChannelFdoExtension->InterruptLevel            = InterruptResource->InterruptLevel;
+    AtaXChannelFdoExtension->InterruptFlags            = InterruptResource->InterruptFlags;
+    AtaXChannelFdoExtension->InterruptShareDisposition = InterruptResource->InterruptShareDisposition;
+    AtaXChannelFdoExtension->InterruptAffinity         = InterruptResource->InterruptAffinity;
+
+    Status = STATUS_SUCCESS;
+  }
+  else
+  {
+    Status = AtaXQuerySataInterface(AtaXChannelFdo);                                          // запрос SATA интерфейса
+    DPRINT("AtaXChannelFdoStartDevice: AtaXQuerySataInterface return Status - %p\n", Status);
+
+    if ( NT_SUCCESS(Status) && AtaXChannelFdoExtension->SataInterface.Size )
+    {
+      DPRINT("AtaXChannelFdoStartDevice: AtaXChannelFdoExtension->SataInterface - %p\n", AtaXChannelFdoExtension->SataInterface);
+    }
+    // Определяем ресурсы
+    Status = AtaXParseTranslatedResources(AtaXChannelFdoExtension, ResourcesTranslated);
+  }
 
   if ( NT_SUCCESS(Status) && AtaXChannelFdoExtension->InterruptLevel )
   {

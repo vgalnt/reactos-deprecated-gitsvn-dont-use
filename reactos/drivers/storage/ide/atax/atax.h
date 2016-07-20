@@ -14,6 +14,7 @@
 #include <mountdev.h>
 #include <initguid.h>
 #include <wdmguid.h>
+#include <..\ahci.h>
 #include <..\bmaster.h>
 #include <..\sata.h>
 
@@ -279,6 +280,7 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
   // Interfaces
   PBUS_INTERFACE_STANDARD  BusInterface;
   BUS_MASTER_INTERFACE     BusMasterInterface;
+  PAHCI_INTERFACE          AhciInterface;
   SATA_INTERFACE           SataInterface;
 
   // IoConnectInterrupt() 
