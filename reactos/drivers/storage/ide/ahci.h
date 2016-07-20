@@ -6,6 +6,25 @@
 #include <srb.h>
 
 
+typedef union _AHCI_DESCRIPTION_INFORMATION {    
+    
+  struct {
+    ULONG  CommandFISLength   :5;  // CFL    Length of the Command FIS (in DWORDS, 2 ... 16). A ‘0’ represents 0 DW, ‘4’ represents 4 DW. A length of ‘0’ or ‘1’ is illegal. The maximum value allowed is 10h, or 16 DW. The HBA uses this field to know the length of the FIS it shall send to the device.
+    ULONG  ATAPI              :1;  // A      When ‘1’, indicates that a PIO setup FIS shall be sent by the device indicating a transfer for the ATAPI command. The HBA may prefetch data from CTBAz[ACMD] in anticipation of receiving the PIO Setup FIS.
+    ULONG  Write              :1;  // W      (1: H2D, 0: D2H). When set, indicates that the direction is a device write (data from system memory to device). When cleared, indicates that the direction is a device read (data from device to system memory). If this bit is set and the P bit is set, the HBA may prefetch data in anticipation of receiving a DMA Setup FIS, a DMA Activate FIS, or PIO Setup FIS, in addition to prefetching PRDs.
+    ULONG  Prefetchable       :1;  // P      This bit is only valid if the PRDTL field is non-zero or the ATAPI ‘A’ bit is set in the command header. When set and PRDTL is non-zero, the HBA may prefetch PRDs in anticipation of performing a data transfer. When set and the ATAPI ‘A’ bit is set in the command header, the HBA may prefetch the ATAPI command. System software shall not set this bit when using native command queuing commands or when using FIS-based switching with a Port Multiplier.
+    ULONG  Reset              :1;  // R      When ‘1’, indicates that the command that software built is for a part of a software reset sequence that manipulates the SRST bit in the Device Control register. The HBA must perform a SYNC escape (if necessary) to get the device into an idle state before sending the command.
+    ULONG  BIST               :1;  // B      When ‘1’, indicates that the command that software built is for sending a BIST FIS. The HBA shall send the FIS and enter a test mode. The tests that can be run in this mode are outside the scope of this specification.
+    ULONG  ClearBusy          :1;  // C      Clear Busy upon R_OK. When set, the HBA shall clear PxTFD.STS.BSY and PxCI.CI(pIssueSlot) after transmitting this FIS and receiving R_OK. When cleared, the HBA shall not clear PxTFD.STS.BSY nor PxCI.CI(pIssueSlot) after transmitting this FIS and receiving R_OK.
+    ULONG  Reserved           :1;        
+    ULONG  PortMultiplierPort :4;  // PMP    Indicates the port number that should be used when constructing Data FISes on transmit, and to check against all FISes received for this command. This value shall be set to 0h by software when it has been determined that it is communicating to a directly attached device.
+    ULONG  PRDTLength         :16; // PRDTL  Physical Region Descriptor Table Length. Length of the scatter/gather descriptor table in entries, called the Physical Region Descriptor Table. Each entry is 4 DW. A ‘0’ represents 0 entries, FFFFh represents 65,535 entries. The HBA uses this field to know when to stop fetching PRDs. If this field is ‘0’, then no data transfer shall occur with the command.
+  };
+  
+  ULONG  AsULONG;
+
+} AHCI_DESCRIPTION_INFORMATION, *PAHCI_DESCRIPTION_INFORMATION;
+
 typedef struct _AHCI_COMMAND_HEADER {
 
   AHCI_DESCRIPTION_INFORMATION  DescriptionInformation;   //0 DI 
