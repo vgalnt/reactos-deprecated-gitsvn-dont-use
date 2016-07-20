@@ -6,6 +6,20 @@
 #include <srb.h>
 
 
+typedef enum {
+
+  FIS_TYPE_REGISTER_H2D    = 0x27,  // Register FIS - Host to Device
+  FIS_TYPE_REGISTER_D2H    = 0x34,  // Register FIS - Device to Host
+  FIS_TYPE_DMA_ACTIVATE    = 0x39,  // DMA activate FIS - Device to Host
+  FIS_TYPE_DMA_SETUP       = 0x41,  // DMA setup FIS - Bi-directional
+  FIS_TYPE_DATA            = 0x46,  // Data FIS - Bi-directional
+  FIS_TYPE_BIST_ACTIVATE   = 0x58,  // BIST activate FIS - Bi-directional
+  FIS_TYPE_PIO_SETUP       = 0x5F,  // PIO setup FIS - Device to Host
+  FIS_TYPE_SET_DEVICE_BITS = 0xA1,  // Set Device bits FIS - Device to Host
+
+} FIS_TYPE;
+
+
 //-------------------------------------------------
 
 typedef struct _AHCI_PRD {
