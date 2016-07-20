@@ -6,6 +6,16 @@
 #include <srb.h>
 
 
+typedef struct _AHCI_COMMAND_TABLE { // This address must be aligned to a 128-byte cache line (0x0080)
+
+  UCHAR      CommandFIS[0x40];    // CFIS  This is a software constructed FIS. For data transfer operations, this is the H2D Register FIS format as specified in the Serial ATA Revision 2.5 specification. The HBA sets PxTFD.STS.BSY, and then sends this structure to the attached port. If a Port Multiplier is attached, this field must have the Port Multiplier port number in the FIS itself – it shall not be added by the HBA. Valid CFIS lengths are 2 to 16 Dwords and must be in Dword granularity.
+  UCHAR      AtapiCommand[0x10];  // ACMD  ATAPI command, 12 or 16 bytes. This is a software constructed region of 12 or 16 bytes in length that contains the ATAPI command to transmit if the “A” bit is set in the command header. The ATAPI command must be either 12 or 16 bytes in length. The length transmitted by the HBA is determined by the PIO setup FIS that is sent by the device requesting the ATAPI command.
+  UCHAR      Reserved[0x30];
+
+  AHCI_PRDT  PRDTable;            // PRDT  Physical Region Descriptor Table.
+
+} AHCI_COMMAND_TABLE, *PAHCI_COMMAND_TABLE;
+
 typedef union _AHCI_DESCRIPTION_INFORMATION {    
     
   struct {
