@@ -334,11 +334,22 @@ AtaXIssueIdentify(
   UCHAR              SignatureDeviceNumber;
   ULONG              WaitCount = 20000;
   ULONG              ix, jx;
+  BOOLEAN            SataMode;
 
   DPRINT("AtaXIssueIdentify: AtaXChannelFdoExtension - %p, DeviceNumber - %x, Command - %x\n", AtaXChannelFdoExtension, DeviceNumber, Command);
 
   AtaXRegisters1 = &AtaXChannelFdoExtension->BaseIoAddress1;
   AtaXRegisters2 = &AtaXChannelFdoExtension->BaseIoAddress2;
+
+  if ( AtaXChannelFdoExtension->SataInterface.SataBaseAddress )
+  {
+    SataMode = TRUE;
+    DeviceNumber = 0;
+  }
+  else
+  {
+    SataMode = FALSE;
+  }
 
   // Выбираем устройство по номеру DeviceNumber
   WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect, (UCHAR)(((DeviceNumber & 1) << 4) | IDE_DRIVE_SELECT));
@@ -355,11 +366,22 @@ AtaXIssueIdentify(
 
     if ( StatusByte != IDE_STATUS_IDLE )
     {
-      // Делаем программный сброс устройства
-      AtaXSoftReset(AtaXRegisters1, AtaXRegisters2, DeviceNumber);
-      // Выбираем устройство по номеру DeviceNumber
-      WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect, (UCHAR)(((DeviceNumber & 1) << 4) | IDE_DRIVE_SELECT));
-      AtaXWaitOnBusy(AtaXRegisters2);
+      if ( SataMode )
+      {
+        // Делаем программный сброс устройства
+        AtaXSataSoftReset(AtaXRegisters1, DeviceNumber);
+        // Выбираем устройство по номеру DeviceNumber
+        WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect, (UCHAR)(((DeviceNumber & 1) << 4) | IDE_DRIVE_SELECT));
+        AtaXSataWaitOnBusy(AtaXRegisters1);
+      }
+      else
+      {
+        // Делаем программный сброс устройства
+        AtaXSoftReset(AtaXRegisters1, AtaXRegisters2, DeviceNumber);
+        // Выбираем устройство по номеру DeviceNumber
+        WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect, (UCHAR)(((DeviceNumber & 1) << 4) | IDE_DRIVE_SELECT));
+        AtaXWaitOnBusy(AtaXRegisters2);
+      }
 
       // Считываем альтернативный регистр состояния
       StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
@@ -418,7 +440,10 @@ AtaXIssueIdentify(
 
   for ( jx = 0; jx < 2; jx++ )
   {
-    AtaXWaitOnBusy(AtaXRegisters2);
+    if ( SataMode )
+      AtaXSataWaitOnBusy(AtaXRegisters1);
+    else
+      AtaXWaitOnBusy(AtaXRegisters2);
 
     //StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
     if ( Command == IDE_COMMAND_IDENTIFY )        DPRINT("AtaXIssueIdentify: Send ATA IDENTIFY command.\n");
@@ -430,10 +455,23 @@ AtaXIssueIdentify(
     // Ожидание готовности устройства
     for ( ix = 0; ix < 4; ix++ )
     {
-      AtaXWaitForDrq(AtaXRegisters2);
-      // Считываем альтернативный регистр состояния
-      StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
-      DPRINT("AtaXIssueIdentify: StatusByte (%x)\n", StatusByte);
+      if ( SataMode )
+      {
+        AtaXSataWaitForDrq(AtaXRegisters1);
+        // Считываем альтернативный регистр состояния
+        StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+        DPRINT("AtaXIssueIdentify: StatusByte (%x)\n", StatusByte);
+        // Считываем регистр состояния
+        StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+        DPRINT("AtaXIssueIdentify: StatusByte (%x)\n", StatusByte);
+      }
+      else
+      {
+        AtaXWaitForDrq(AtaXRegisters2);
+        // Считываем альтернативный регистр состояния
+        StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+        DPRINT("AtaXIssueIdentify: StatusByte (%x)\n", StatusByte);
+      }
 
       if ( StatusByte & IDE_STATUS_DRQ )  // если устройство готово
       {
@@ -459,9 +497,18 @@ AtaXIssueIdentify(
           return FALSE; 
       }
 
-      AtaXWaitOnBusy(AtaXRegisters2);
-      // Считываем альтернативный регистр состояния
-      StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+      if ( SataMode )
+      {
+        AtaXSataWaitOnBusy(AtaXRegisters1);
+        // Считываем регистр состояния
+        StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+      }
+      else
+      {
+        AtaXWaitOnBusy(AtaXRegisters2);
+        // Считываем альтернативный регистр состояния
+        StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+      }
     }
 
     if ( ix == 4 && jx == 0 )
@@ -469,11 +516,20 @@ AtaXIssueIdentify(
       // Нет корректного ответа от устройства после первой попытки, но будет еще один шанс
       DPRINT("AtaXIssueIdentify: DRQ never asserted (%x). Error reg (%x)\n", StatusByte, READ_PORT_UCHAR(AtaXRegisters1->Error));
 
-
-      // Делаем программный сброс устройства
-      AtaXSoftReset(AtaXRegisters1, AtaXRegisters2, DeviceNumber);
-      // Считываем альтернативный регистр состояния
-      StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+      if ( SataMode )
+      {
+        // Делаем программный сброс устройства
+        AtaXSataSoftReset(AtaXRegisters1, DeviceNumber);
+        // Считываем регистр состояния
+        StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+      }
+      else
+      {
+        // Делаем программный сброс устройства
+        AtaXSoftReset(AtaXRegisters1, AtaXRegisters2, DeviceNumber);
+        // Считываем альтернативный регистр состояния
+        StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+      }
 
       DPRINT("AtaXIssueIdentify: StatusByte after soft reset - %p\n", StatusByte);
     }
@@ -486,11 +542,23 @@ AtaXIssueIdentify(
   if ( (Command == IDE_COMMAND_IDENTIFY) && (StatusByte & IDE_STATUS_ERROR) )
     return FALSE;
  
-
-  AtaXWaitOnBusy(AtaXRegisters2);
-  // Считываем альтернативный регистр состояния
-  StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
-  DPRINT("AtaXIssueIdentify: Status before read words - %x\n", StatusByte);
+  if ( SataMode )
+  {
+    AtaXSataWaitOnBusy(AtaXRegisters1);
+    // Считываем альтернативный регистр состояния
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+    DPRINT("AtaXIssueIdentify: Status before read words - %x\n", StatusByte);
+    // Считываем  регистр состояния
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+    DPRINT("AtaXIssueIdentify: Status before read words - %x\n", StatusByte);
+  }
+  else
+  {
+    AtaXWaitOnBusy(AtaXRegisters2);
+    // Считываем альтернативный регистр состояния
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+    DPRINT("AtaXIssueIdentify: Status before read words - %x\n", StatusByte);
+  }
 
   if ( !(StatusByte & IDE_STATUS_DRQ) ) // если устройство не готово
     return FALSE;
@@ -498,10 +566,22 @@ AtaXIssueIdentify(
   // Считываем паспорт устройства в буфер Identify
   READ_PORT_BUFFER_USHORT(AtaXRegisters1->Data, (PUSHORT)Identify, sizeof(IDENTIFY_DATA) / 2); // 0x200/2 = 0x100 (512/2 = 256)
 
-  // Считываем альтернативный регистр состояния
-  StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
-  DPRINT("AtaXIssueIdentify: Status before read words - %x\n", StatusByte);
-
+  // Считываем регистр состояния и проверяем на ошибки
+  if ( SataMode )
+  {
+    // Считываем альтернативный регистр состояния
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+    DPRINT("AtaXIssueIdentify: Status before read words - %x\n", StatusByte);
+    // Считываем  регистр состояния
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters1->Status);
+    DPRINT("AtaXIssueIdentify: Status before read words - %x\n", StatusByte);
+  }
+  else
+  {
+    // Считываем альтернативный регистр состояния
+    StatusByte = READ_PORT_UCHAR(AtaXRegisters2->AlternateStatus);
+    DPRINT("AtaXIssueIdentify: Status before read words - %x\n", StatusByte);
+  }
 
   if ( StatusByte & IDE_STATUS_ERROR ) // если ошибка
     return FALSE;
@@ -579,7 +659,6 @@ AtaXIssueIdentify(
   DPRINT("Identify->DeviceWriteProtect          /* 255 */ - %x\n", Identify->DeviceWriteProtect);
   DPRINT("Identify->Reserved10                  /* 255 */ - %x\n", Identify->Reserved10);
   //*/
-
 
   DPRINT(" AtaXIssueIdentify return - TRUE\n");
   return TRUE;
