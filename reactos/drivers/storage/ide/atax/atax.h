@@ -398,6 +398,11 @@ AtaXSendCommand(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
     IN PSCSI_REQUEST_BLOCK Srb);
 
+VOID
+AtaXSendRequestSense(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PSCSI_REQUEST_BLOCK InitialSrb);
+
 // ataxfdo.c
 NTSTATUS
 AtaXChannelFdoDispatchPnp(

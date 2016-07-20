@@ -727,8 +727,8 @@ AtaXDeviceSetup(
   DPRINT("AtaXDeviceSetup: PioMode - %x\n", PioMode);
   DPRINT("AtaXDeviceSetup: DmaMode - %x\n", DmaMode);
 
-  AtaXChannelFdoExtension->DeviceFlags[DeviceNumber] &= ~DFLAGS_USE_DMA;  // установка режима PIO
-  //AtaXChannelFdoExtension->DeviceFlags[DeviceNumber] |= DFLAGS_USE_DMA;  // установка режима DMA
+  //AtaXChannelFdoExtension->DeviceFlags[DeviceNumber] &= ~DFLAGS_USE_DMA;  // установка режима PIO
+  AtaXChannelFdoExtension->DeviceFlags[DeviceNumber] |= DFLAGS_USE_DMA;  // установка режима DMA
 
   //Set transfer mode - Установка режима передачи данных (подкоманда команды SET FEATURES)
   //-------------------------------------------------------------------------------------

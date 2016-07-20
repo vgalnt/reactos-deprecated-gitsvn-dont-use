@@ -1224,7 +1224,7 @@ AtaXStartIo(
   PIO_STACK_LOCATION        IoStack;
   PSCSI_REQUEST_BLOCK       Srb;
   PSCSI_REQUEST_BLOCK_INFO  SrbInfo;
-//  NTSTATUS                  Status;
+  NTSTATUS                  Status;
 
   DPRINT("AtaXStartIo ... \n");
   AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXChannelFdo->DeviceExtension;
@@ -1278,8 +1278,7 @@ ASSERT(FALSE);
   
       if ( BusMasterInterface->BusMasterPrepare )
       {
- ASSERT(FALSE);
-/*       Status = BusMasterInterface->BusMasterPrepare(
+        Status = BusMasterInterface->BusMasterPrepare(
                           BusMasterInterface->ChannelPdoExtension,
                           Srb->DataBuffer,
                           Srb->DataTransferLength,
@@ -1287,6 +1286,7 @@ ASSERT(FALSE);
                           (Srb->SrbFlags & SRB_FLAGS_DATA_OUT) == SRB_FLAGS_DATA_OUT,
                           SynchronizeStartPacket,
                           AtaXChannelFdo);
+
         DPRINT(" AtaXStartIo: BusMasterPrepare return - %x\n", Status);
 
         if ( NT_SUCCESS(Status) )
@@ -1294,7 +1294,6 @@ ASSERT(FALSE);
   
         DPRINT("AtaXStartIo: BusMasterPrepare fail. Status - %x. Enable PIO mode.\n", Status);
         Srb->SrbFlags &= ~SRB_FLAGS_USE_DMA;  // PIO mode
-*/
       }
     }
   }

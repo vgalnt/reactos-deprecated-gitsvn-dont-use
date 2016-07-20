@@ -1672,8 +1672,7 @@ Error:
         }
   
         KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
-ASSERT(FALSE);
-        //AtaXSendRequestSense(AtaXChannelFdoExtension, Srb);
+        AtaXSendRequestSense(AtaXChannelFdoExtension, Srb);
         return;
       }
   
