@@ -456,6 +456,147 @@ AtaXConvertSrbStatus(UCHAR SrbStatus)
   return STATUS_IO_DEVICE_ERROR;
 }
 
+VOID
+AtaXPrintSrbStatus(UCHAR SrbStatus)
+{
+  UCHAR  Status;
+
+  //DPRINT("SrbStatus - %x\n", SrbStatus);
+
+  if ( SrbStatus & SRB_STATUS_AUTOSENSE_VALID ) {                      // 0x80
+    DPRINT("SrbStatus & SRB_STATUS_AUTOSENSE_VALID\n");
+  }
+  if ( SrbStatus & SRB_STATUS_QUEUE_FROZEN ) {                         // 0x40
+    DPRINT("SrbStatus & SRB_STATUS_QUEUE_FROZEN\n");
+  }
+
+  Status = SRB_STATUS(SrbStatus);
+
+  switch ( Status )
+  {
+    case SRB_STATUS_PENDING :                 // 0x00
+      DPRINT("SrbStatus == SRB_STATUS_PENDING (0x00)\n");
+      break;
+
+    case SRB_STATUS_SUCCESS :                 // 0x01
+      DPRINT("SrbStatus == SRB_STATUS_SUCCESS (0x01)\n");
+      break;
+
+    case SRB_STATUS_ABORTED :                 // 0x02
+      DPRINT("SrbStatus == SRB_STATUS_ABORTED (0x02)\n");
+      break;
+
+    case SRB_STATUS_ABORT_FAILED :            // 0x03
+      DPRINT("SrbStatus ==  SRB_STATUS_ABORT_FAILED (0x03)\n");
+      break;
+
+    case SRB_STATUS_ERROR :                   // 0x04
+      DPRINT("SrbStatus ==  SRB_STATUS_ERROR (0x04)\n");
+      break;
+
+    case SRB_STATUS_BUSY :                    // 0x05 \n");
+      DPRINT("SrbStatus ==  SRB_STATUS_BUSY (0x05)\n");
+      break;
+
+    case SRB_STATUS_INVALID_REQUEST :         // 0x06 \n");
+      DPRINT("SrbStatus ==  SRB_STATUS_INVALID_REQUEST (0x06)\n");
+      break;
+
+    case SRB_STATUS_INVALID_PATH_ID :         // 0x07
+      DPRINT("SrbStatus ==  SRB_STATUS_INVALID_PATH_ID (0x07)\n");
+      break;
+
+    case SRB_STATUS_NO_DEVICE :               // 0x08
+      DPRINT("SrbStatus ==  SRB_STATUS_NO_DEVICE (0x08)\n");
+      break;
+
+    case SRB_STATUS_TIMEOUT :                 // 0x09
+      DPRINT("SrbStatus ==  SRB_STATUS_TIMEOUT (0x09)\n");
+      break;
+
+    case SRB_STATUS_SELECTION_TIMEOUT :       // 0x0A
+      DPRINT("SrbStatus ==  SRB_STATUS_SELECTION_TIMEOUT (0x0A)\n");
+      break;
+
+    case SRB_STATUS_COMMAND_TIMEOUT :         // 0x0B
+      DPRINT("SrbStatus ==  SRB_STATUS_COMMAND_TIMEOUT (0x0B)\n");
+      break;
+
+    case SRB_STATUS_MESSAGE_REJECTED :        // 0x0D
+      DPRINT("SrbStatus ==  SRB_STATUS_MESSAGE_REJECTED (0x0D)\n");
+      break;
+
+    case SRB_STATUS_BUS_RESET :               // 0x0E
+      DPRINT("SrbStatus ==  SRB_STATUS_BUS_RESET (0x0E)\n");
+      break;
+
+    case SRB_STATUS_PARITY_ERROR :            // 0x0F
+      DPRINT("SrbStatus ==  SRB_STATUS_PARITY_ERROR (0x0F)\n");
+      break;
+
+    case SRB_STATUS_REQUEST_SENSE_FAILED :    // 0x10
+      DPRINT("SrbStatus ==  SRB_STATUS_REQUEST_SENSE_FAILED (0X10)\n");
+      break;
+
+    case SRB_STATUS_NO_HBA :                  // 0x11
+      DPRINT("SrbStatus ==  SRB_STATUS_NO_HBA (0x11)\n");
+      break;
+
+    case SRB_STATUS_DATA_OVERRUN :            // 0x12
+      DPRINT("SrbStatus ==  SRB_STATUS_DATA_OVERRUN (0x12)\n");
+      break;
+
+    case SRB_STATUS_UNEXPECTED_BUS_FREE :     // 0x13
+      DPRINT("SrbStatus ==  SRB_STATUS_UNEXPECTED_BUS_FREE (0x13)\n");
+      break;
+
+    case SRB_STATUS_PHASE_SEQUENCE_FAILURE :  // 0x14
+      DPRINT("SrbStatus ==  SRB_STATUS_PHASE_SEQUENCE_FAILURE (0x14)\n");
+      break;
+
+    case SRB_STATUS_BAD_SRB_BLOCK_LENGTH :    // 0x15
+      DPRINT("SrbStatus ==  SRB_STATUS_BAD_SRB_BLOCK_LENGTH (0x15)\n");
+      break;
+
+    case SRB_STATUS_REQUEST_FLUSHED :         // 0x16
+      DPRINT("SrbStatus ==  SRB_STATUS_REQUEST_FLUSHED (0x16)\n");
+      break;
+
+    case SRB_STATUS_INVALID_LUN :             // 0x20
+      DPRINT("SrbStatus ==  SRB_STATUS_INVALID_LUN (0x20)\n");
+      break;
+
+    case SRB_STATUS_INVALID_TARGET_ID :       // 0x21
+      DPRINT("SrbStatus ==  SRB_STATUS_INVALID_TARGET_ID (0x21)\n");
+      break;
+
+    case SRB_STATUS_BAD_FUNCTION :            // 0x22
+      DPRINT("SrbStatus ==  SRB_STATUS_BAD_FUNCTION (0x22)\n");
+      break;
+
+    case SRB_STATUS_ERROR_RECOVERY :          // 0x23
+      DPRINT("SrbStatus ==  SRB_STATUS_ERROR_RECOVERY (0x23)\n");
+      break;
+
+    case SRB_STATUS_NOT_POWERED :             // 0x24
+      DPRINT("SrbStatus ==  SRB_STATUS_NOT_POWERED (0x24)\n");
+      break;
+
+    case SRB_STATUS_LINK_DOWN :               // 0x25
+      DPRINT("SrbStatus ==  SRB_STATUS_LINK_DOWN (0x25)\n");
+      break;
+
+    case SRB_STATUS_INTERNAL_ERROR :          // 0x30
+      DPRINT("SrbStatus ==  SRB_STATUS_INTERNAL_ERROR (0x30)\n");
+      break;
+
+    default:
+      DPRINT("SrbStatus ==  Unknown!!! \n");
+      ASSERT(FALSE);
+      break;
+  }
+}
+
 BOOLEAN 
 InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
 {
@@ -1056,7 +1197,7 @@ AtaXProcessCompletedRequest(
   DPRINT("AtaXProcessCompletedRequest: Srb->ScsiStatus - %x\n", Srb->ScsiStatus);
 
   if ( AtaXDEBUG )
-    ASSERT(FALSE);//AtaXPrintSrbStatus(Srb->SrbStatus);
+    AtaXPrintSrbStatus(Srb->SrbStatus);
 
   if ( AtaXDEBUG )
     ASSERT(FALSE);//AtaXPrintSrbScsiStatus(Srb->ScsiStatus);
