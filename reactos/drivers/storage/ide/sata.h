@@ -2,6 +2,17 @@
 #define _SATA_PCH_
 
 
+typedef struct _SATA_INTERRUPT_RESOURCE {
+
+  UCHAR        InterruptShareDisposition;
+  USHORT       InterruptFlags;
+  ULONG        InterruptLevel;
+  ULONG        InterruptVector;
+  KAFFINITY    InterruptAffinity;
+  PKINTERRUPT  InterruptObject;
+
+} SATA_INTERRUPT_RESOURCE, *PSATA_INTERRUPT_RESOURCE;
+
 typedef struct _SATA_INTERFACE {
 
   // generic interface header
