@@ -659,7 +659,10 @@ AtaXDevicePdoDispatchScsi(
 
         case SCSIOP_TEST_UNIT_READY:    /* 0x00 */
           DPRINT("IRP_MJ_SCSI / SRB_FUNCTION_EXECUTE_SCSI / SCSIOP_TEST_UNIT_READY \n");
-ASSERT(FALSE);
+          if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE ) //if ATAPI
+            break;// --> IoStartPacket
+          Status = AtaXSendCommand(AtaXChannelFdoExtension, Srb);
+          return Status;
 
         case SCSIOP_REQUEST_SENSE:      /* 0x03 */
           DPRINT("IRP_MJ_SCSI / SRB_FUNCTION_EXECUTE_SCSI / SCSIOP_REQUEST_SENSE (PIO mode)\n");

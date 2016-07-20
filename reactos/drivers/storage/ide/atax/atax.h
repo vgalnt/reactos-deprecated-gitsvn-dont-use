@@ -378,6 +378,11 @@ AtaXStartIo(
     IN PDEVICE_OBJECT AtaXChannelFdo,
     IN PIRP Irp);
 
+NTSTATUS
+AtaXSendCommand(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PSCSI_REQUEST_BLOCK Srb);
+
 // ataxfdo.c
 NTSTATUS
 AtaXChannelFdoDispatchPnp(
