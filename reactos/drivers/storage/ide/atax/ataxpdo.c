@@ -869,8 +869,58 @@ ASSERT(FALSE);
       break;
 
     case SRB_FUNCTION_FLUSH_QUEUE:            /* 0x15 */
+    {
+      PIO_STACK_LOCATION      Stack;
+      PKDEVICE_QUEUE_ENTRY    Entry;
+      PIRP                    NextIrp, IrpList;
+      KIRQL                   Irql;
+
       DPRINT("IRP_MJ_SCSI / SRB_FUNCTION_FLUSH_QUEUE \n");
-ASSERT(FALSE);
+
+      KeAcquireSpinLock(&AtaXChannelFdoExtension->SpinLock, &Irql);
+
+      if ( !(AtaXDevicePdoExtension->Flags & LUNEX_FROZEN_QUEUE) )
+      {
+        DPRINT("Queue is not frozen really\n");
+        KeReleaseSpinLock(&AtaXChannelFdoExtension->SpinLock, Irql);
+        Status = STATUS_INVALID_DEVICE_REQUEST;
+        break;
+      }
+
+      ASSERT(AtaXDevicePdoExtension->SrbInfo.Srb == NULL); // нет активных запросов
+
+      // список Irp из очереди устройства
+
+      IrpList = NULL;
+
+      while ( (Entry = KeRemoveDeviceQueue(&AtaXDevicePdoExtension->DeviceQueue)) != NULL )
+      {
+        NextIrp = CONTAINING_RECORD(Entry, IRP, Tail.Overlay.DeviceQueueEntry);
+
+        Stack = IoGetCurrentIrpStackLocation(NextIrp);
+        Srb = Stack->Parameters.Scsi.Srb;
+
+        Srb->SrbStatus = SRB_STATUS_REQUEST_FLUSHED;
+        NextIrp->IoStatus.Status = STATUS_UNSUCCESSFUL;
+
+        NextIrp->Tail.Overlay.ListEntry.Flink = (PLIST_ENTRY)IrpList;
+        IrpList = NextIrp;
+      }
+
+      AtaXDevicePdoExtension->Flags &= ~LUNEX_FROZEN_QUEUE;         // "разморозка" очереди
+      KeReleaseSpinLock(&AtaXChannelFdoExtension->SpinLock, Irql);
+
+      // завершим запросы
+      while ( IrpList )
+      {
+        NextIrp = IrpList;
+        IrpList = (PIRP)NextIrp->Tail.Overlay.ListEntry.Flink;
+        IoCompleteRequest(NextIrp, 0);
+      }
+
+      Status = STATUS_SUCCESS;
+      break;
+    }
 
     case SRB_FUNCTION_REMOVE_DEVICE:          /* 0x16 */
       DPRINT("IRP_MJ_SCSI / SRB_FUNCTION_REMOVE_DEVICE FIXME\n");
