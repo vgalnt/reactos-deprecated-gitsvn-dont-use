@@ -85,6 +85,25 @@ typedef struct _FIS_DMA_ACTIVATE {
 
 } FIS_DMA_ACTIVATE, *PFIS_DMA_ACTIVATE;
 
+typedef struct _FIS_DMA_SETUP {
+
+  UCHAR  FISType;                   // 0x41  FIS_TYPE_DMA_SETUP
+  UCHAR  PortMultiplierPort :4;     // Port multiplier
+  UCHAR  Reserved0          :1;
+  UCHAR  Direction          :1;     // Data transfer direction, 1 - Device to Host
+  UCHAR  Interrupt          :1;     // 
+  UCHAR  AutoActivate       :1;
+  UCHAR  Reserved1[2];
+
+  ULONG DmaBufferIdentifierLow;
+  ULONG DmaBufferIdentifierHigh;
+  ULONG Reserved2;
+  ULONG DmaBufferOffset;
+  ULONG DmaTransferCount;
+  ULONG Reserved3;
+
+} FIS_DMA_SETUP, *PFIS_DMA_SETUP;
+
 //-------------------------------------------------
 
 typedef struct _AHCI_PRD {
