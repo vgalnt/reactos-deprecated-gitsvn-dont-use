@@ -6,6 +6,20 @@
 #include <srb.h>
 
 
+typedef struct _AHCI_RECEIVED_FIS {        // 256 byte - aligned  (0x0100)
+
+  FIS_DMA_SETUP        FisDmaSetup;      // DSFIS   When a DMA setup FIS arrives from the device, the HBA copies it to the DSFIS area of this structure
+  ULONG                Reserved0;
+  FIS_PIO_SETUP        FisPioSetup;      // PSFIS   When a PIO setup FIS arrives from the device, the HBA copies it to the PSFIS area of this structure
+  ULONG                Reserved1[3];
+  FIS_REGISTER_D2H     FisRegisterD2H;   // RFIS    When a D2H (device to host) Register FIS arrives from the device, the HBA copies it to the RFIS area of this structure
+  ULONG                Reserved2;
+  FIS_SET_DEVICE_BITS  FisSetDeviceBits; // SDBFIS  When a Set Device Bits FIS arrives from the device, the HBA copies it to the SDBFIS area of this structure
+  FIS_UNKNOWN          FisUnknown;       // UFIS    When an unknown FIS arrives from the device, the HBA copies it to the UFIS area in this structure, and sets PxSERR.DIAG.F, which is reflected in PxIS.UFS when the FIS is posted to memory
+  ULONG                Reserved3[24];
+
+} AHCI_RECEIVED_FIS, *PAHCI_RECEIVED_FIS;
+
 typedef union _AHCI_SATA_STATUS {
 
   struct {
