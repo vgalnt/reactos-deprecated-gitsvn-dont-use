@@ -6,6 +6,10 @@
 #include <srb.h>
 
 
+typedef struct _AHCI_PRDT {  // 128 byte - aligned (0x0080)
+  AHCI_PRD Descriptor[32];  // дл€ 128 кЅ (0x20000) должно хватить?(может +1?) ≈сли добавл€ть ещЄ один AHCI_PRD (а это 16 байт), то надо добивать +112 байт (128 byte - aligned)
+} AHCI_PRDT, *PAHCI_PRDT;
+
 typedef struct _AHCI_COMMAND_TABLE { // This address must be aligned to a 128-byte cache line (0x0080)
 
   UCHAR      CommandFIS[0x40];    // CFIS  This is a software constructed FIS. For data transfer operations, this is the H2D Register FIS format as specified in the Serial ATA Revision 2.5 specification. The HBA sets PxTFD.STS.BSY, and then sends this structure to the attached port. If a Port Multiplier is attached, this field must have the Port Multiplier port number in the FIS itself Ц it shall not be added by the HBA. Valid CFIS lengths are 2 to 16 Dwords and must be in Dword granularity.
