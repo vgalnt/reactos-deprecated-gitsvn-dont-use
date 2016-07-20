@@ -135,7 +135,7 @@ AtaXSoftReset(
   KeStallExecutionProcessor(500);
 }
 
-VOID NTAPI 
+VOID 
 AtaXSataSoftReset(
     IN PATAX_REGISTERS_1 AtaXRegisters1,
     IN ULONG DeviceNumber)

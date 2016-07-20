@@ -356,15 +356,26 @@ VOID
 AtaXWaitOnBusy(IN PATAX_REGISTERS_2 AtaXRegisters2);
 
 VOID 
+AtaXSataWaitOnBusy(IN PATAX_REGISTERS_1 AtaXRegisters1);
+
+VOID 
 AtaXWaitOnBaseBusy(IN PATAX_REGISTERS_1 AtaXRegisters1);
 
 VOID
 AtaXWaitForDrq(IN PATAX_REGISTERS_2 AtaXRegisters2);
 
+VOID
+AtaXSataWaitForDrq(IN PATAX_REGISTERS_1 AtaXRegisters1);
+
 VOID 
 AtaXSoftReset(
     IN PATAX_REGISTERS_1 AtaXRegisters1,
     IN PATAX_REGISTERS_2 AtaXRegisters2,
+    IN ULONG DeviceNumber);
+
+VOID 
+AtaXSataSoftReset(
+    IN PATAX_REGISTERS_1 AtaXRegisters1,
     IN ULONG DeviceNumber);
 
 ULONG 

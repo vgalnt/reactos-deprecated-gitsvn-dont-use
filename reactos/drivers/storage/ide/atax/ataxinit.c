@@ -654,7 +654,11 @@ AtaXDeviceSetup(
   //Set transfer mode - Установка режима передачи данных (подкоманда команды SET FEATURES)
   //-------------------------------------------------------------------------------------
   WRITE_PORT_UCHAR(AtaXRegisters1->DriveSelect, (UCHAR)(((DeviceNumber & 1) << 4) | IDE_DRIVE_SELECT));
-  AtaXWaitOnBusy(AtaXRegisters2);
+
+  if ( AtaXChannelFdoExtension->SataInterface.SataBaseAddress )
+    AtaXSataWaitOnBusy(AtaXRegisters1);
+  else
+    AtaXWaitOnBusy(AtaXRegisters2);
 
   WRITE_PORT_UCHAR(AtaXRegisters1->Features, 0x03);
 
