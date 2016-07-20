@@ -338,6 +338,83 @@ AtaXNotification(
   AtaXChannelFdoExtension->InterruptData.Flags |= ATAX_NOTIFICATION_NEEDED;
 }
 
+NTSTATUS
+AtaXCompletionRequestSense(
+    IN PDEVICE_OBJECT DeviceObject,
+    IN PIRP Irp,
+    IN PVOID Context)
+{
+  PSCSI_REQUEST_BLOCK     Srb;
+  PSCSI_REQUEST_BLOCK     InitialSrb;
+  PIRP                    InitialIrp;
+  PDEVICE_OBJECT          AtaXDevicePdo;
+  PPDO_DEVICE_EXTENSION   AtaXDevicePdoExtension;
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  KIRQL                   Irql;
+
+  Srb = (PSCSI_REQUEST_BLOCK)Context;
+  DPRINT("AtaXCompletionRequestSense: Srb - %p\n", Srb);
+
+  AtaXDevicePdo = IoGetNextIrpStackLocation(Irp)->DeviceObject;
+  AtaXDevicePdoExtension = (PPDO_DEVICE_EXTENSION)AtaXDevicePdo->DeviceExtension;
+  AtaXChannelFdoExtension = AtaXDevicePdoExtension->AtaXChannelFdoExtension;
+
+  if ( (Srb->Function == SRB_FUNCTION_RESET_BUS) ||
+       (Srb->Function == SRB_FUNCTION_ABORT_COMMAND) )
+  {
+    ExFreePool(Srb);
+    IoFreeIrp(Irp);
+    return STATUS_MORE_PROCESSING_REQUIRED;
+  }
+
+  /* Get a pointer to the SRB and IRP which were initially sent */
+  InitialSrb = *((PVOID *)(Srb + 1));
+  InitialIrp = InitialSrb->OriginalRequest;
+
+  if ( (SRB_STATUS(Srb->SrbStatus) == SRB_STATUS_SUCCESS) ||
+       (SRB_STATUS(Srb->SrbStatus) == SRB_STATUS_DATA_OVERRUN) )
+  {
+    InitialSrb->SrbStatus |= SRB_STATUS_AUTOSENSE_VALID;                 /* Sense data is OK */
+    InitialSrb->SenseInfoBufferLength = (UCHAR)Srb->DataTransferLength;  /* Set length to be the same */
+  }
+
+  /* Make sure initial SRB's queue is frozen */
+  ASSERT(InitialSrb->SrbStatus & SRB_STATUS_QUEUE_FROZEN);
+
+  KeAcquireSpinLock(&AtaXChannelFdoExtension->SpinLock, &Irql);
+  AtaXDevicePdoExtension->Flags &= ~LUNEX_FROZEN_QUEUE; 
+  KeReleaseSpinLock(&AtaXChannelFdoExtension->SpinLock, Irql);
+
+  if ( (InitialSrb->SrbFlags & SRB_FLAGS_NO_QUEUE_FREEZE) &&
+       (InitialSrb->SrbStatus & SRB_STATUS_QUEUE_FROZEN) )
+  {
+    AtaXDevicePdoExtension->Flags &= ~LUNEX_NEED_REQUEST_SENSE; 
+
+    KeAcquireSpinLock(&AtaXChannelFdoExtension->SpinLock, &Irql);
+    AtaXGetNextRequest(AtaXChannelFdoExtension, AtaXDevicePdoExtension);
+    KeReleaseSpinLock(&AtaXChannelFdoExtension->SpinLock, Irql);
+
+    InitialSrb->SrbStatus &= ~SRB_STATUS_QUEUE_FROZEN;
+  }
+
+  IoCompleteRequest(InitialIrp, IO_DISK_INCREMENT);
+  ExFreePool(Srb);
+
+  if ( Irp->MdlAddress != NULL )
+  {
+    MmUnlockPages(Irp->MdlAddress);
+    IoFreeMdl(Irp->MdlAddress);
+    Irp->MdlAddress = NULL;
+  }
+
+  //KeAcquireSpinLock(&AtaXChannelFdoExtension->SpinLock, &Irql);
+  //AtaXChannelFdoExtension->Flags |= ATAX_DISCONNECT_ALLOWED;
+  //KeReleaseSpinLock(&AtaXChannelFdoExtension->SpinLock, Irql);
+
+  IoFreeIrp(Irp);
+  return STATUS_MORE_PROCESSING_REQUIRED;
+}
+
 VOID
 AtaXSendRequestSense(
     IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
