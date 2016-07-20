@@ -6,6 +6,30 @@
 #include <srb.h>
 
 
+typedef struct _AHCI_PORT_REGISTERS {
+
+  PAHCI_COMMAND_LIST          CmdListBaseAddress;       // 0x00, PxCLB   Command List Base Address, 1024 byte - aligned
+  ULONG                       CmdListBaseAddressUpper;  // 0x04, PxCLBU  Command List Base Address, upper 32 bits
+  PAHCI_RECEIVED_FIS          FISBaseAddress;           // 0x08, PxFB    256 byte - aligned
+  ULONG                       FISBaseAddressUpper;      // 0x0C  PxFBU   Upper 32 bits
+  AHCI_PORT_INTERRUPT_STATUS  InterruptStatus;          // 0x10  PxIS
+  ULONG                       InterruptEnable;          // 0x14  PxIE
+  AHCI_PORT_COMMAND           Command;                  // 0x18, PxCMD   Command and Status
+  ULONG                       Reserved1;                // 0x1C
+  ULONG                       TaskFileData;             // 0x20  PxTFD
+  ULONG                       Signature;                // 0x24  PxSIG
+  AHCI_SATA_STATUS            SataStatus;               // 0x28, PxSSTS  SATA Status       (SCR0:SStatus)
+  ULONG                       SataControl;              // 0x2C, PxSCTL  SATA Control      (SCR2:SControl)
+  ULONG                       SataError;                // 0x30, PxSERR  SATA Error        (SCR1:SError)
+  ULONG                       SataActive;               // 0x34, PxSACT  SATA Active       (SCR3:SActive)
+  ULONG                       CommandIssue;             // 0x38  PxCI
+  ULONG                       SataNotification;         // 0x3C, PxSNTF  SATA Notification (SCR4:SNotification)
+  ULONG                       FISSwitchingControl;      // 0x40, PxFBS   FIS-based Switch Control
+  ULONG                       Reserved2[11];            // 0x44 ... 0x6F
+  ULONG                       VendorSpecific[4];        // 0x70 ... 0x7F
+
+}  AHCI_PORT_REGISTERS, *PAHCI_PORT_REGISTERS;
+
 typedef union _AHCI_HOST_GLOBAL_CONTROL {
 
   struct {
