@@ -6,6 +6,28 @@
 #include <srb.h>
 
 
+typedef struct _AHCI_MEMORY_REGISTERS {
+                                                   // 0x0000 ... 0x002B - Generic Host Control :
+  AHCI_HOST_CAPABILITIES    HostCapabilities;      // 0x0000, CAP
+  AHCI_HOST_GLOBAL_CONTROL  GlobalHostControl;     // 0x0004, GHC
+  ULONG	                    InterruptStatus;       // 0x0008, IS
+  ULONG	                    PortsImplemented;      // 0x000C, PI
+  ULONG	                    Version;               // 0x0010, VS
+  ULONG	                    CmdCompletionControl;  // 0x0014, CCC_CTL    Command completion coalescing control
+  ULONG	                    CmdCompletionPorts;    // 0x0018, CCC_PORTS  Command completion coalescing ports
+  ULONG	                    EMLocation;            // 0x001C, EM_LOC     Enclosure management location
+  ULONG	                    EMControl;             // 0x0020, EM_CTL     Enclosure management control
+  ULONG	                    HostCapabilitiesExt;   // 0x0024, CAP2       Host capabilities extended
+  ULONG	                    Handoff;               // 0x0028, BOHC       BIOS/OS handoff control and status
+  
+  ULONG	                    Reserved[0x0D];        // 0x002C ... 0x005F
+  ULONG	                    ReservedNvmhci[0x10];  // 0x0060 ... 0x009F - Reserved for NVMHCI
+  ULONG	                    Vendor[0x18];          // 0x00A0 ... 0x00FF - Vendor specific registers
+
+  AHCI_PORT_REGISTERS       PortControl[32];       // 0x0100 ... 0x10FF - Port control registers
+  
+} AHCI_MEMORY_REGISTERS, *PAHCI_MEMORY_REGISTERS;
+
 typedef struct _AHCI_INTERRUPT_RESOURCE {
 
   UCHAR        InterruptShareDisposition;
@@ -29,6 +51,7 @@ typedef struct _AHCI_INTERFACE {
   // controller interface
   PVOID                     ChannelPdoExtension;
   PAHCI_INTERRUPT_RESOURCE  InterruptResource;
+  PAHCI_MEMORY_REGISTERS    Abar;
 
 
 } AHCI_INTERFACE, *PAHCI_INTERFACE;

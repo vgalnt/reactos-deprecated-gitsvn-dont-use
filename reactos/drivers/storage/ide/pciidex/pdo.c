@@ -547,7 +547,7 @@ PciIdeXPdoPnpDispatch(
 
 					case 7: // QueryAhciInterface
 						DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QueryAhciInterface. NOT_SUPPORTED\n");
-						ASSERT(FALSE);
+						//ASSERT(FALSE);
 						Status = STATUS_NOT_SUPPORTED;
 						break;
 
