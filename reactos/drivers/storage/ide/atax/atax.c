@@ -90,6 +90,25 @@ AtaXWaitForDrq(IN PATAX_REGISTERS_2 AtaXRegisters2)
   }
 }
 
+VOID
+AtaXSataWaitForDrq(IN PATAX_REGISTERS_1 AtaXRegisters1)
+{
+  ULONG ix;
+  UCHAR Status;
+
+  for ( ix = 0; ix < 1000; ix++ )
+  {
+    Status = READ_PORT_UCHAR(AtaXRegisters1->Status);
+
+    if ( Status & IDE_STATUS_BUSY )
+      KeStallExecutionProcessor(50);
+    else if ( Status & IDE_STATUS_DRQ )
+      break;
+    else
+      KeStallExecutionProcessor(50);
+  }
+}
+
 VOID 
 AtaXSoftReset(
     IN PATAX_REGISTERS_1 AtaXRegisters1,
