@@ -23,9 +23,31 @@ ASSERT(FALSE);
 NTSTATUS
 BusMasterStart(IN PPDO_DEVICE_EXTENSION DeviceExtension)//ChannelPdoExtension
 {
-  DPRINT("BusMasterEnable: ... \n");
-ASSERT(FALSE);
-  return 0;
+	PFDO_DEVICE_EXTENSION  ControllerFdoExtension;
+	ULONG  BusMasterChannelBase;
+
+	DPRINT("BusMasterStart: ... \n");
+
+	ControllerFdoExtension = DeviceExtension->ControllerFdo->DeviceExtension;
+
+	BusMasterChannelBase = ControllerFdoExtension->BusMasterBase +
+                               8 * (DeviceExtension->Channel & 1);
+
+	if ( DeviceExtension->WriteToDevice )
+	{
+		DPRINT("BusMasterStart: Write to device (1). BusMasterChannelBase - %p\n", BusMasterChannelBase);
+		//Start Bus Master. PCI bus master reads are performed.
+		WRITE_PORT_UCHAR((PUCHAR)BusMasterChannelBase, 1);
+	}
+	else
+	{
+		DPRINT("BusMasterStart: Read from device (9). BusMasterChannelBase - %p\n", BusMasterChannelBase);
+		//Start Bus Master. PCI bus master writes are performed.
+		WRITE_PORT_UCHAR((PUCHAR)BusMasterChannelBase, 9);
+	}
+
+	DPRINT("BusMasterStart: return STATUS_SUCCESS\n");
+	return STATUS_SUCCESS;
 }
 
 NTSTATUS
@@ -35,12 +57,12 @@ BusMasterStop(IN PPDO_DEVICE_EXTENSION DeviceExtension)//ChannelPdoExtension
 	ULONG  BusMasterChannelBase;
 
 
-	DPRINT("BusMasterDisable: DeviceExtension - %p\n", DeviceExtension);
+	DPRINT("BusMasterStop: DeviceExtension - %p\n", DeviceExtension);
 
 	ControllerFdoExtension = DeviceExtension->ControllerFdo->DeviceExtension;
 
 	BusMasterChannelBase = ControllerFdoExtension->BusMasterBase + 8 * (DeviceExtension->Channel & 1);
-	DPRINT("BusMasterDisable: BusMasterChannelBase - %p\n", BusMasterChannelBase);
+	DPRINT("BusMasterStop: BusMasterChannelBase - %p\n", BusMasterChannelBase);
 
 	/*
 	Start/Stop Bus Master: Writing a '1' to this bit enables bus master operation of the controller.
@@ -66,7 +88,7 @@ BusMasterStop(IN PPDO_DEVICE_EXTENSION DeviceExtension)//ChannelPdoExtension
 
 	WRITE_PORT_UCHAR((PUCHAR)(BusMasterChannelBase + 2), 4);    //Clear Interrupt bit (Bus Master IDE Status Register)
 
-	DPRINT("BusMasterDisable: return STATUS_SUCCESS\n");
+	DPRINT("BusMasterStop: return STATUS_SUCCESS\n");
 	return STATUS_SUCCESS;
 }
 
