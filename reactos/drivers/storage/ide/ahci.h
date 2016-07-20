@@ -104,6 +104,17 @@ typedef struct _FIS_DMA_SETUP {
 
 } FIS_DMA_SETUP, *PFIS_DMA_SETUP;
 
+typedef struct _FIS_DATA {
+
+  UCHAR  FISType;                   // 0x46  FIS_TYPE_DATA
+  UCHAR  PortMultiplierPort :4;     // Port multiplier
+  UCHAR  Reserved0          :4;
+  UCHAR  Reserved1[2];
+
+  ULONG Data[2048];
+
+} FIS_DATA, *PFIS_DATA;
+
 //-------------------------------------------------
 
 typedef struct _AHCI_PRD {
