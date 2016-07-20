@@ -597,6 +597,56 @@ AtaXPrintSrbStatus(UCHAR SrbStatus)
   }
 }
 
+VOID
+AtaXPrintSrbScsiStatus(UCHAR ScsiStatus)
+{
+  //DPRINT("ScsiStatus - %x\n", ScsiStatus);
+
+  switch ( ScsiStatus )
+  {
+    case SCSISTAT_GOOD :                   // 0x00
+      DPRINT("ScsiStatus - SCSISTAT_GOOD (0x00)\n");
+      break;
+
+    case SCSISTAT_CHECK_CONDITION :        // 0x02
+      DPRINT("ScsiStatus - SCSISTAT_CHECK_CONDITION (0x02)\n");
+      break;
+
+    case SCSISTAT_CONDITION_MET :          // 0x04
+      DPRINT("ScsiStatus - SCSISTAT_CONDITION_MET (0x04)\n");
+      break;
+
+    case SCSISTAT_BUSY :                   // 0x08
+      DPRINT("ScsiStatus - SCSISTAT_BUSY (0x08)\n");
+      break;
+
+    case SCSISTAT_INTERMEDIATE :           // 0x10
+      DPRINT("ScsiStatus - SCSISTAT_INTERMEDIATE (0x10)\n");
+      break;
+
+    case SCSISTAT_INTERMEDIATE_COND_MET :  // 0x14
+      DPRINT("ScsiStatus - SCSISTAT_INTERMEDIATE_COND_MET (0x14)\n");
+      break;
+
+    case SCSISTAT_RESERVATION_CONFLICT :   // 0x18
+      DPRINT("ScsiStatus - SCSISTAT_RESERVATION_CONFLICT (0x18)\n");
+      break;
+
+    case SCSISTAT_COMMAND_TERMINATED :     // 0x22
+      DPRINT("ScsiStatus - SCSISTAT_COMMAND_TERMINATED (0x22)\n");
+      break;
+
+    case SCSISTAT_QUEUE_FULL :             // 0x28
+      DPRINT("ScsiStatus - SCSISTAT_QUEUE_FULL (0x28)\n");
+      break;
+
+    default:
+      DPRINT("ScsiStatus - Unknown SCSISTAT_\n");
+      ASSERT(FALSE);
+      break;
+  }
+}
+
 BOOLEAN 
 InterruptRoutine(IN  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension)
 {
@@ -1200,7 +1250,7 @@ AtaXProcessCompletedRequest(
     AtaXPrintSrbStatus(Srb->SrbStatus);
 
   if ( AtaXDEBUG )
-    ASSERT(FALSE);//AtaXPrintSrbScsiStatus(Srb->ScsiStatus);
+    AtaXPrintSrbScsiStatus(Srb->ScsiStatus);
 
   if ( Srb->SrbFlags & SRB_FLAGS_USE_DMA )
   {
