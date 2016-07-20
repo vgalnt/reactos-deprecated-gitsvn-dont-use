@@ -6,6 +6,20 @@
 #include <srb.h>
 
 
+typedef union _AHCI_HOST_GLOBAL_CONTROL {
+
+  struct {
+    ULONG Reset               :1;  // HR    HBA Reset: When set by SW, this bit causes an internal reset of the HBA.
+    ULONG InterruptEnable     :1;  // IE    This global bit enables interrupts from the HBA. When cleared (reset default), all interrupt sources from all ports are disabled. When set, interrupts are enabled.
+    ULONG RevertSingleMessage :1;  // MRSM  MSI Revert to Single Message (MRSM)
+    ULONG Reserved            :28;
+    ULONG AhciEnable          :1;  // AE    When set, indicates that communication to the HBA shall be via AHCI mechanisms.
+  };
+
+  ULONG AsULONG;
+
+} AHCI_HOST_GLOBAL_CONTROL, *PAHCI_HOST_GLOBAL_CONTROL;
+
 typedef union _AHCI_HOST_CAPABILITIES  {
 
   struct {
