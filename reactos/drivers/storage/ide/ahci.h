@@ -47,6 +47,35 @@ typedef struct _FIS_REGISTER_H2D {
 
 } FIS_REGISTER_H2D, *PFIS_REGISTER_H2D;
 
+typedef struct _FIS_REGISTER_D2H {
+
+  UCHAR  FISType;                   // 0x34  FIS_TYPE_REGISTER_D2H
+  UCHAR  PortMultiplierPort :4;     // Port multiplier
+  UCHAR  Reserved0          :2;
+  UCHAR  Interrupt          :1;     // This bit reflects the interrupt bit line of the device. Devices shall not modify the behavior of this bit based on the state of the nIEN bit received in Register Host to Device FISes
+  UCHAR  Reserved1          :1;
+  UCHAR  Status;                    // Contains the new value of the Status (and Alternate status) register of the Shadow Register Block
+  UCHAR  Error;                     // Contains the new value of the Error register of the Shadow Register Block
+
+  UCHAR  LBA0;                      // LBA low register  7:0
+  UCHAR  LBA1;                      // LBA mid register  15:8
+  UCHAR  LBA2;                      // LBA high register 23:16
+  UCHAR  Device;                    // Device register
+
+  UCHAR  LBA3;                      // LBA register      31:24
+  UCHAR  LBA4;                      // LBA register      39:32
+  UCHAR  LBA5;                      // LBA register      47:40
+  UCHAR  Reserved2;
+
+  UCHAR  CountLow;                  // Count register   7:0
+  UCHAR  CountHigh;                 // Count register  15:8
+  UCHAR  Reserved3;
+  UCHAR  Reserved4;
+
+  UCHAR  Reserved[4];
+
+} FIS_REGISTER_D2H, *PFIS_REGISTER_D2H;
+
 //-------------------------------------------------
 
 typedef struct _AHCI_PRD {
