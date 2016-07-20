@@ -190,6 +190,10 @@ typedef struct _FIS_SET_DEVICE_BITS {
 
 } FIS_SET_DEVICE_BITS, *PFIS_SET_DEVICE_BITS;
 
+typedef struct _FIS_UNKNOWN {
+  UCHAR uByte[64];
+} FIS_UNKNOWN, *PFIS_UNKNOWN;
+
 //-------------------------------------------------
 
 typedef struct _AHCI_PRD {
