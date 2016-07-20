@@ -15,9 +15,34 @@ BusMasterPrepare(
     IN PVOID                  AllocateAdapter,
     IN PDEVICE_OBJECT         AtaXChannelFdo)
 {
-  DPRINT("BusMasterPrepare: ... \n");
-ASSERT(FALSE);
-  return 0;
+	NTSTATUS Status;
+	PDMA_ADAPTER DmaAdapter = DeviceExtension->DmaAdapter;
+
+	DeviceExtension->WriteToDevice = WriteToDevice;
+
+	DPRINT("BusMasterPrepare: DeviceExtension       - %p\n", DeviceExtension);
+	DPRINT("BusMasterPrepare: CurrentVirtualAddress - %p\n", CurrentVirtualAddress);
+	DPRINT("BusMasterPrepare: Length                - %p\n", Length);
+	DPRINT("BusMasterPrepare: Mdl                   - %p\n", Mdl);
+	DPRINT("BusMasterPrepare: WriteToDevice         - %p\n", WriteToDevice);
+	DPRINT("BusMasterPrepare: AllocateAdapter       - %p\n", AllocateAdapter);
+	DPRINT("BusMasterPrepare: AtaXChannelFdo        - %p\n", AtaXChannelFdo);
+
+	DeviceExtension->AllocateAdapter        = AllocateAdapter;
+	DeviceExtension->AllocateAdapterContext = (ULONG)AtaXChannelFdo;
+
+	Status = DmaAdapter->DmaOperations->GetScatterGatherList(
+			DmaAdapter,
+			DeviceExtension->SelfDevice,
+			Mdl,
+			CurrentVirtualAddress,
+			Length,
+			(PDRIVER_LIST_CONTROL)AdapterListControl,
+			DeviceExtension,
+			WriteToDevice);
+
+	DPRINT("BusMasterPrepare: return - %p\n", Status);
+	return Status;
 }
 
 NTSTATUS
