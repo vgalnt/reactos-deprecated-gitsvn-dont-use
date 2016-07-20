@@ -6,6 +6,41 @@
 #include <srb.h>
 
 
+typedef union _AHCI_PORT_COMMAND {
+
+  struct {
+    ULONG  Start                              :1; // ST     When set, the HBA may process the command list. When cleared, the HBA may not process the command list. Whenever this bit is changed from a ‘0’ to a ‘1’, the HBA starts processing the command list at entry ‘0’. Whenever this bit is changed from a ‘1’ to a ‘0’, the PxCI register is cleared by the HBA upon the HBA putting the controller into an idle state. This bit shall only be set to ‘1’ by software after PxCMD.FRE has been set to ‘1’. Refer to section 10.3.1 for important restrictions on when ST can be set to ‘1’.
+    ULONG  SpinUpDevice                       :1; // SUD
+    ULONG  PowerOnDevice                      :1; // POD
+    ULONG  CmdListOverride                    :1; // CLO    Setting this bit to ‘1’ causes PxTFD.STS.BSY and PxTFD.STS.DRQ to be cleared to ‘0’. This allows a software reset to be transmitted to the device regardless of whether the BSY and DRQ bits are still set in the PxTFD.STS register. The HBA sets this bit to ‘0’ when PxTFD.STS.BSY and PxTFD.STS.DRQ have been cleared to ‘0’. A write to this register with a value of ‘0’ shall have no effect. This bit shall only be set to ‘1’ immediately prior to setting the PxCMD.ST bit to ‘1’ from a previous value of ‘0’. Setting this bit to ‘1’ at any other time is not supported and will result in indeterminate behavior. Software must wait for CLO to be cleared to ‘0’ before setting PxCMD.ST to ‘1’.
+    ULONG  FISReceiveEnable                   :1; // FRE    When set, the HBA may post received FISes into the FIS receive area pointed to by PxFB (and for 64-bit HBAs, PxFBU). When cleared, received FISes are not accepted by the HBA, except for the first D2H register FIS after the initialization sequence, and no FISes are posted to the FIS receive area. System software must not set this bit until PxFB (PxFBU) have been programmed with a valid pointer to the FIS receive area, and if software wishes to move the base, this bit must first be cleared, and software must wait for the FR bit in this register to be cleared.
+    ULONG  Reserved                           :3;
+
+    ULONG  CurrentCmdSlot                     :5; // CCS    This field is valid when PxCMD.ST is set to ‘1’ and shall be set to the command slot value of the command that is currently being issued by the HBA. When PxCMD.ST transitions from ‘1’ to ‘0’, this field shall be reset to ‘0’. After PxCMD.ST transitions from ‘0’ to ‘1’, the highest priority slot to issue from next is command slot 0. After the first command has been issued, the highest priority slot to issue from next is PxCMD.CCS + 1. For example, after the HBA has issued its first command, if CCS = 0h and PxCI is set to 3h, the next command that will be issued is from command slot 1.
+    ULONG  MechanicalPresenceSwitchState      :1; // MPSS
+    ULONG  FISReceiveRunning                  :1; // FR     When set, the FIS Receive DMA engine for the port is running.
+    ULONG  CmdListRunning                     :1; // CR     When this bit is set, the command list DMA engine for the port is running. 
+
+    ULONG  ColdPresenceState                  :1; // CPS
+    ULONG  PortMultiplierAttached             :1; // PMA
+    ULONG  HotPlugCapablePort                 :1; // HPCP
+    ULONG  MechanicalPresenceSwitchAttached   :1; // MPSP
+    ULONG  ColdPresenceDetection              :1; // CPD
+    ULONG  ExternalSATAPort                   :1; // ESP
+    ULONG  FISSwitchingCapablePort            :1; // FBSCP
+    ULONG  AutomaticPartialSlumberTransitions :1; // APSTE
+
+    ULONG  DeviceIsAtapi                      :1; // ATAPI  When set to ‘1’, the connected device is an ATAPI device. This bit is used by the HBA to control whether or not to generate the desktop LED when commands are active.
+    ULONG  AtapiDriveLedEnable                :1; // DLAE
+    ULONG  AggressiveLinkPowerManagement      :1; // ALPE
+    ULONG  AggressiveSlumberPartial           :1; // ASP
+    ULONG  InterfaceCommunicationControl      :4; // ICC
+  };
+
+  ULONG AsULONG;
+
+} AHCI_PORT_COMMAND, *PAHCI_PORT_COMMAND;
+
 typedef union _AHCI_PORT_INTERRUPT_STATUS {
 
   struct {
