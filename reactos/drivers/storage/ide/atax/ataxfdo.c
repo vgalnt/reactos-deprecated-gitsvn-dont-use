@@ -275,6 +275,61 @@ AtaXQueryBusMasterInterface(IN PDEVICE_OBJECT AtaXChannelFdo)
 }
 
 NTSTATUS
+AtaXQueryAhciInterface(IN PDEVICE_OBJECT AtaXChannelFdo)
+{
+  PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
+  KEVENT                  Event;
+  NTSTATUS                Status;
+  PIRP                    Irp;
+  IO_STATUS_BLOCK         IoStatus;
+  PIO_STACK_LOCATION      Stack;
+
+  DPRINT("AtaXQueryAhciInterface: ... \n");
+
+  AtaXChannelFdoExtension = (PFDO_CHANNEL_EXTENSION)AtaXChannelFdo->DeviceExtension;
+
+  KeInitializeEvent(&Event, NotificationEvent, FALSE);
+
+  Irp = IoBuildSynchronousFsdRequest(
+            IRP_MJ_PNP,
+            AtaXChannelFdoExtension->CommonExtension.LowerDevice,
+            NULL,
+            0,
+            NULL,
+            &Event,
+            &IoStatus);
+
+  if ( Irp == NULL )
+    return STATUS_INSUFFICIENT_RESOURCES;    // no memory
+
+  Stack = IoGetNextIrpStackLocation(Irp);
+
+  Stack->MajorFunction = IRP_MJ_PNP;
+  Stack->MinorFunction = IRP_MN_QUERY_INTERFACE;
+
+  Stack->Parameters.QueryInterface.Size = 7; // тип интерфейса = AtaXQueryAhciInterface
+  Stack->Parameters.QueryInterface.InterfaceType = (LPGUID)&GUID_BUS_INTERFACE_STANDARD;
+  Stack->Parameters.QueryInterface.Version = 1; //не используется
+  Stack->Parameters.QueryInterface.Interface = (PINTERFACE)&AtaXChannelFdoExtension->AhciInterface;
+  Stack->Parameters.QueryInterface.InterfaceSpecificData = NULL; //не используется
+
+  Irp->IoStatus.Status = STATUS_NOT_SUPPORTED;
+
+  Status = IoCallDriver(AtaXChannelFdoExtension->CommonExtension.LowerDevice, Irp);  // call pciide, or ahcix, or ... 
+
+  if ( Status == STATUS_PENDING )
+  {
+    KeWaitForSingleObject(&Event, Executive, KernelMode, FALSE, NULL);
+    Status = IoStatus.Status;
+  }
+
+  DPRINT("AtaXQueryAhciInterface: AtaXChannelFdoExtension->AhciControllerInterface - %p\n", AtaXChannelFdoExtension->AhciInterface);
+
+  DPRINT("AtaXQueryAhciInterface: return Status - %x\n", Status);
+  return Status;
+}
+
+NTSTATUS
 AtaXQuerySataInterface(IN PDEVICE_OBJECT AtaXChannelFdo)
 {
   PFDO_CHANNEL_EXTENSION  AtaXChannelFdoExtension;
