@@ -76,6 +76,15 @@ typedef struct _FIS_REGISTER_D2H {
 
 } FIS_REGISTER_D2H, *PFIS_REGISTER_D2H;
 
+typedef struct _FIS_DMA_ACTIVATE {
+
+  UCHAR  FISType;                   // 0x39  FIS_TYPE_DMA_ACTIVATE
+  UCHAR  PortMultiplierPort :4;     // Port multiplier
+  UCHAR  Reserved0          :4;
+  UCHAR  Reserved1[2];
+
+} FIS_DMA_ACTIVATE, *PFIS_DMA_ACTIVATE;
+
 //-------------------------------------------------
 
 typedef struct _AHCI_PRD {
