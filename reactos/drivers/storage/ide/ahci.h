@@ -170,6 +170,26 @@ typedef struct _FIS_PIO_SETUP {
  
 } FIS_PIO_SETUP, *PFIS_PIO_SETUP;
 
+typedef struct _FIS_SET_DEVICE_BITS {
+
+  UCHAR  FISType;                   // 0xA1  FIS_TYPE_SET_DEVICE_BITS
+
+  UCHAR  PortMultiplierPort :4;     // Port multiplier
+  UCHAR  Reserved0          :2;
+  UCHAR  I                  :1;
+  UCHAR  N                  :1;
+
+  UCHAR  StatusLow          :3;
+  UCHAR  Reserved1          :1;
+  UCHAR  StatusHigh         :3;
+  UCHAR  Reserved2          :1;
+
+  UCHAR  Error;
+
+  ULONG ProtocolSpecific;
+
+} FIS_SET_DEVICE_BITS, *PFIS_SET_DEVICE_BITS;
+
 //-------------------------------------------------
 
 typedef struct _AHCI_PRD {
