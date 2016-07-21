@@ -114,6 +114,15 @@ static void test_EnableScrollBar(void)
     ok( ret, "The scrollbar should be enabled.\n" );
     ok( IsWindowEnabled( hScroll ), "The scrollbar window should be enabled.\n" );
 
+    /* disable window, try to re-enable */
+    ret = EnableWindow( hScroll, FALSE );
+    ok( !ret, "got %d\n", ret );
+    ok( !IsWindowEnabled( hScroll ), "The scrollbar window should be disabled.\n" );
+
+    ret = EnableScrollBar( hScroll, SB_CTL, ESB_ENABLE_BOTH );
+    ok( ret, "got %d\n", ret );
+    ok( IsWindowEnabled( hScroll ), "The scrollbar window should be disabled.\n" );
+
     DestroyWindow(hScroll);
     DestroyWindow(mainwnd);
 }
@@ -213,11 +222,8 @@ static void test_GetScrollBarInfo(void)
     ok( ret, "The GetWindowRect() call should not fail.\n" );
     ok( !(sbi.rgstate[0] & (STATE_SYSTEM_INVISIBLE|STATE_SYSTEM_OFFSCREEN)),
         "unexpected rgstate(0x%x)\n", sbi.rgstate[0]);
-    ok( EqualRect(&rect, &sbi.rcScrollBar),
-        "WindowRect(%d, %d, %d, %d) != rcScrollBar(%d, %d, %d, %d)\n",
-        rect.top, rect.left, rect.bottom, rect.right,
-        sbi.rcScrollBar.top, sbi.rcScrollBar.left,
-        sbi.rcScrollBar.bottom, sbi.rcScrollBar.right );
+    ok(EqualRect(&rect, &sbi.rcScrollBar), "WindowRect %s != rcScrollBar %s\n",
+       wine_dbgstr_rect(&rect), wine_dbgstr_rect(&sbi.rcScrollBar));
 
     /* Test windows horizontal and vertical scrollbar to make sure rcScrollBar
      * is still returned in screen coordinates by moving the window, and
@@ -234,11 +240,8 @@ static void test_GetScrollBarInfo(void)
     OffsetRect(&rect, 5, 5);
     ret = pGetScrollBarInfo( hMainWnd, OBJID_HSCROLL, &sbi);
     ok( ret, "The GetScrollBarInfo() call should not fail.\n" );
-    ok( EqualRect(&rect, &sbi.rcScrollBar),
-        "PreviousRect(%d, %d, %d, %d) != CurrentRect(%d, %d, %d, %d)\n",
-        rect.top, rect.left, rect.bottom, rect.right,
-        sbi.rcScrollBar.top, sbi.rcScrollBar.left,
-        sbi.rcScrollBar.bottom, sbi.rcScrollBar.right );
+    ok(EqualRect(&rect, &sbi.rcScrollBar), "PreviousRect %s != CurrentRect %s\n",
+       wine_dbgstr_rect(&rect), wine_dbgstr_rect(&sbi.rcScrollBar));
 
     sbi.cbSize = sizeof(sbi);
     ret = pGetScrollBarInfo( hMainWnd, OBJID_VSCROLL, &sbi);
@@ -251,11 +254,8 @@ static void test_GetScrollBarInfo(void)
     OffsetRect(&rect, 5, 5);
     ret = pGetScrollBarInfo( hMainWnd, OBJID_VSCROLL, &sbi);
     ok( ret, "The GetScrollBarInfo() call should not fail.\n" );
-    ok( EqualRect(&rect, &sbi.rcScrollBar),
-        "PreviousRect(%d, %d, %d, %d) != CurrentRect(%d, %d, %d, %d)\n",
-        rect.top, rect.left, rect.bottom, rect.right,
-        sbi.rcScrollBar.top, sbi.rcScrollBar.left,
-        sbi.rcScrollBar.bottom, sbi.rcScrollBar.right );
+    ok(EqualRect(&rect, &sbi.rcScrollBar), "PreviousRect %s != CurrentRect %s\n",
+       wine_dbgstr_rect(&rect), wine_dbgstr_rect(&sbi.rcScrollBar));
 
     DestroyWindow(hScroll);
     DestroyWindow(hMainWnd);
@@ -539,7 +539,7 @@ static void test_SetScrollInfo(void)
     EnableScrollBar(hScroll, SB_CTL, ESB_DISABLE_BOTH);
 
     ret = IsWindowEnabled(hScroll);
-    ok(!ret, "scroll bar disabled\n");
+    ok(!ret, "scroll bar enabled\n");
 
     memset(&si, 0, sizeof(si));
     si.cbSize = sizeof(si);
@@ -551,9 +551,10 @@ static void test_SetScrollInfo(void)
     memset(&si, 0, sizeof(si));
     si.cbSize = sizeof(si);
     ret = IsWindowEnabled(hScroll);
-    ok(!ret, "scroll bar disabled\n");
+    ok(!ret, "scroll bar enabled\n");
     si.fMask = SIF_POS|SIF_RANGE|SIF_PAGE|SIF_DISABLENOSCROLL;
     si.nMax = 100;
+    si.nMin = 10;
     si.nPos = 0;
     si.nPage = 100;
     SetScrollInfo(hScroll, SB_CTL, &si, TRUE);
@@ -563,6 +564,18 @@ static void test_SetScrollInfo(void)
     si.fMask = 0xf;
     ret = GetScrollInfo(hScroll, SB_CTL, &si);
     ok(ret, "got %d\n", ret);
+
+    EnableScrollBar(hScroll, SB_CTL, ESB_ENABLE_BOTH);
+    ok(IsWindowEnabled(hScroll), "expected enabled scrollbar\n");
+
+    si.fMask = SIF_POS|SIF_RANGE|SIF_PAGE|SIF_DISABLENOSCROLL;
+    si.nMax = 10;
+    si.nMin = 100;
+    si.nPos = 0;
+    si.nPage = 100;
+    SetScrollInfo(hScroll, SB_CTL, &si, TRUE);
+    ret = IsWindowEnabled(hScroll);
+    ok(ret, "scroll bar disabled\n");
 
     DestroyWindow(hScroll);
     DestroyWindow(mainwnd);
