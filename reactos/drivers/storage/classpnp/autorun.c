@@ -330,7 +330,7 @@ ClasspInterpretGesnData(
         UCHAR lowestSetBit;
         UCHAR thisEventBit = (1 << Header->NotificationClass);
 
-        ASSERT(TEST_FLAG(info->Gesn.EventMask, thisEventBit));
+        //ASSERT(TEST_FLAG(info->Gesn.EventMask, thisEventBit));
 
 
         //
