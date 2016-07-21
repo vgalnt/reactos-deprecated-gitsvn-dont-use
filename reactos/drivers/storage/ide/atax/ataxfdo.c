@@ -1,6 +1,6 @@
 #include "atax.h"               
 
-//#define NDEBUG
+#define NDEBUG
 #include <debug.h>
 
 
@@ -1444,7 +1444,7 @@ AtaXChannelInterrupt(
   DPRINT("AtaXChannelInterrupt: InterruptData.Flags - %x\n", AtaXChannelFdoExtension->InterruptData.Flags);
   if ( AtaXChannelFdoExtension->InterruptData.Flags & ATAX_NOTIFICATION_NEEDED )  // если ATAX_NOTIFICATION_NEEDED, то запрашиваем DPC
   {
-    DPRINT1("AtaXChannelInterrupt: KeInsertQueueDpc \n");
+    DPRINT("AtaXChannelInterrupt: KeInsertQueueDpc \n");
     KeInsertQueueDpc(&AtaXChannelFdoExtension->Dpc, NULL, NULL);
   }
 
