@@ -8967,8 +8967,8 @@ ClasspInitializeHotplugInfo(
 {
     PCLASS_PRIVATE_FDO_DATA fdoData = FdoExtension->PrivateFdoData;
     DEVICE_REMOVAL_POLICY deviceRemovalPolicy;
-    NTSTATUS status;
-    ULONG resultLength = 0;
+    //NTSTATUS status;
+    //ULONG resultLength = 0;
     ULONG writeCacheOverride;
 
     PAGED_CODE();
@@ -9027,7 +9027,7 @@ ClasspInitializeHotplugInfo(
         //
         // Query the default removal policy from the kernel
         //
-
+/*
         status = IoGetDeviceProperty(FdoExtension->LowerPdo,
                                      DevicePropertyRemovalPolicy,
                                      sizeof(DEVICE_REMOVAL_POLICY),
@@ -9043,7 +9043,7 @@ ClasspInitializeHotplugInfo(
             return STATUS_UNSUCCESSFUL;
         }
     }
-
+*/
     //
     // use this info to set the DeviceHotplug setting
     // don't rely on DeviceCapabilities, since it can't properly
@@ -9051,9 +9051,9 @@ ClasspInitializeHotplugInfo(
     // stuff out instead.
     //
 
-    if (deviceRemovalPolicy == RemovalPolicyExpectSurpriseRemoval) {
-        fdoData->HotplugInfo.DeviceHotplug = TRUE;
-    } else {
+//    if (deviceRemovalPolicy == RemovalPolicyExpectSurpriseRemoval) {
+//        fdoData->HotplugInfo.DeviceHotplug = TRUE;
+//    } else {
         fdoData->HotplugInfo.DeviceHotplug = FALSE;
     }
 
