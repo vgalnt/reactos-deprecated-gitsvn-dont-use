@@ -1229,14 +1229,14 @@ ClassDispatchPnp(
 
         ClassCompleteRequest(DeviceObject, Irp, IO_NO_INCREMENT);
 
-        DBGTRACE(ClassDebugTrace, ("ClassDispatchPnp (%p,%p): leaving with previous %#x, current %#x.", DeviceObject, Irp, commonExtension->PreviousState, commonExtension->CurrentState));
+        //DBGTRACE(ClassDebugTrace, ("ClassDispatchPnp (%p,%p): leaving with previous %#x, current %#x.", DeviceObject, Irp, commonExtension->PreviousState, commonExtension->CurrentState));
     }
     else {
         /*
          *  The irp is already completed so don't touch it.
          *  This may be a remove so don't touch the device extension.
          */
-        DBGTRACE(ClassDebugTrace, ("ClassDispatchPnp (%p,%p): leaving.", DeviceObject, Irp));
+        //DBGTRACE(ClassDebugTrace, ("ClassDispatchPnp (%p,%p): leaving.", DeviceObject, Irp));
     }
 
     return status;
