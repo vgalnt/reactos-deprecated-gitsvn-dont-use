@@ -86,16 +86,17 @@ ClassAcquireRemoveLockEx(
     )
 {
     PCOMMON_DEVICE_EXTENSION commonExtension = DeviceObject->DeviceExtension;
-    LONG lockValue;
+    //LONG lockValue;
 
 
 
     //
     // Grab the remove lock
     //
-    lockValue = InterlockedIncrement(&commonExtension->RemoveLock);
+//    lockValue = 
+InterlockedIncrement(&commonExtension->RemoveLock);
 
-    #if DBG
+    #if 0//DBG
 
         DebugPrint((ClassDebugRemoveLock, "ClassAcquireRemoveLock: "
                     "Acquired for Object %p & irp %p - count is %d\n",
@@ -217,7 +218,7 @@ ClassReleaseRemoveLock(
     PCOMMON_DEVICE_EXTENSION commonExtension = DeviceObject->DeviceExtension;
     LONG lockValue;
 
-    #if DBG
+    #if 0//DBG
         PREMOVE_TRACKING_BLOCK *listEntry =
             (PREMOVE_TRACKING_BLOCK*)&commonExtension->RemoveTrackingList;
 
@@ -317,9 +318,9 @@ ClassReleaseRemoveLock(
 
     lockValue = InterlockedDecrement(&commonExtension->RemoveLock);
 
-    DebugPrint((ClassDebugRemoveLock, "ClassReleaseRemoveLock: "
-                "Released for Object %p & irp %p - count is %d\n",
-                DeviceObject, Tag, lockValue));
+//    DebugPrint((ClassDebugRemoveLock, "ClassReleaseRemoveLock: "
+//                "Released for Object %p & irp %p - count is %d\n",
+//                DeviceObject, Tag, lockValue));
 
     ASSERT(lockValue >= 0);
 
@@ -335,9 +336,9 @@ ClassReleaseRemoveLock(
         // that it's safe to go ahead.
         //
 
-        DebugPrint((ClassDebugRemoveLock, "ClassReleaseRemoveLock: "
-                    "Release for object %p & irp %p caused lock to go to zero\n",
-                    DeviceObject, Tag));
+//        DebugPrint((ClassDebugRemoveLock, "ClassReleaseRemoveLock: "
+//                    "Release for object %p & irp %p caused lock to go to zero\n",
+//                    DeviceObject, Tag));
 
         KeSetEvent(&commonExtension->RemoveEvent,
                    IO_NO_INCREMENT,
@@ -380,7 +381,7 @@ ClassCompleteRequest(
     )
 {
 
-    #if DBG
+    #if 0//DBG
         PCOMMON_DEVICE_EXTENSION commonExtension = DeviceObject->DeviceExtension;
         PREMOVE_TRACKING_BLOCK *listEntry =
             (PREMOVE_TRACKING_BLOCK*)&commonExtension->RemoveTrackingList;
