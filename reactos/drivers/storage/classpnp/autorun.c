@@ -724,7 +724,7 @@ ClasspSetMediaChangeStateEx(
     LARGE_INTEGER zero;
     NTSTATUS status;
 
-    DBGTRACE(ClassDebugMCN, ("> ClasspSetMediaChangeStateEx"));
+    //DBGTRACE(ClassDebugMCN, ("> ClasspSetMediaChangeStateEx"));
 
     //
     // Reset SMART status on media removal as the old status may not be
@@ -770,7 +770,7 @@ ClasspSetMediaChangeStateEx(
 
     KeReleaseMutex(&info->MediaChangeMutex, FALSE);
 
-    DBGTRACE(ClassDebugMCN, ("< ClasspSetMediaChangeStateEx"));
+    //DBGTRACE(ClassDebugMCN, ("< ClasspSetMediaChangeStateEx"));
 
     return;
 } // end ClassSetMediaChangeStateEx()
@@ -838,7 +838,7 @@ ClasspMediaChangeDetectionCompletion(
 
     ASSERT(info->MediaChangeIrp != NULL);
     ASSERT(!TEST_FLAG(srb->SrbStatus, SRB_STATUS_QUEUE_FROZEN));
-    DBGTRACE(ClassDebugMCN, ("> ClasspMediaChangeDetectionCompletion: Device %p completed MCN irp %p.", DeviceObject, Irp));
+    //DBGTRACE(ClassDebugMCN, ("> ClasspMediaChangeDetectionCompletion: Device %p completed MCN irp %p.", DeviceObject, Irp));
 
     /*
      *  HACK for IoMega 2GB Jaz drive:
@@ -872,7 +872,7 @@ ClasspMediaChangeDetectionCompletion(
     status = STATUS_SUCCESS;
     if (SRB_STATUS(srb->SrbStatus) != SRB_STATUS_SUCCESS) {
 
-        DBGTRACE(ClassDebugMCN, ("ClasspMediaChangeDetectionCompletion - failed - srb status=%s, sense=%s/%s/%s.", DBGGETSRBSTATUSSTR(srb), DBGGETSENSECODESTR(srb), DBGGETADSENSECODESTR(srb), DBGGETADSENSEQUALIFIERSTR(srb)));
+        //DBGTRACE(ClassDebugMCN, ("ClasspMediaChangeDetectionCompletion - failed - srb status=%s, sense=%s/%s/%s.", DBGGETSRBSTATUSSTR(srb), DBGGETSENSECODESTR(srb), DBGGETADSENSECODESTR(srb), DBGGETADSENSEQUALIFIERSTR(srb)));
 
         ClassInterpretSenseInfo(DeviceObject,
                                 srb,
@@ -889,7 +889,7 @@ ClasspMediaChangeDetectionCompletion(
         
         if (!info->Gesn.Supported) {
 
-            DBGTRACE(ClassDebugMCN, ("ClasspMediaChangeDetectionCompletion - succeeded and GESN NOT supported, setting MediaPresent."));
+            //DBGTRACE(ClassDebugMCN, ("ClasspMediaChangeDetectionCompletion - succeeded and GESN NOT supported, setting MediaPresent."));
         
             //
             // success != media for GESN case
@@ -899,19 +899,19 @@ ClasspMediaChangeDetectionCompletion(
 
         }
         else {
-            DBGTRACE(ClassDebugMCN, ("ClasspMediaChangeDetectionCompletion - succeeded (GESN supported)."));
+            ;//DBGTRACE(ClassDebugMCN, ("ClasspMediaChangeDetectionCompletion - succeeded (GESN supported)."));
         }
     }
     
     if (info->Gesn.Supported) {
 
         if (status == STATUS_DATA_OVERRUN) {
-            DBGTRACE(ClassDebugMCN, ("ClasspMediaChangeDetectionCompletion - Overrun"));
+            //DBGTRACE(ClassDebugMCN, ("ClasspMediaChangeDetectionCompletion - Overrun"));
             status = STATUS_SUCCESS;
         }
 
         if (!NT_SUCCESS(status)) {
-            DBGTRACE(ClassDebugMCN, ("ClasspMediaChangeDetectionCompletion: GESN failed with status %x", status));
+            ;//DBGTRACE(ClassDebugMCN, ("ClasspMediaChangeDetectionCompletion: GESN failed with status %x", status));
         } else {
 
             //
@@ -999,7 +999,7 @@ ClasspMediaChangeDetectionCompletion(
             ClasspSendMediaStateIrp(fdoExtension, info, 0);
         }
         else {
-            DBGTRACE(ClassDebugMCN, ("ClasspMediaChangeDetectionCompletion - not retrying immediately"));
+            ;//DBGTRACE(ClassDebugMCN, ("ClasspMediaChangeDetectionCompletion - not retrying immediately"));
         }
         
         //
@@ -1009,7 +1009,7 @@ ClasspMediaChangeDetectionCompletion(
         ClassReleaseRemoveLock(DeviceObject, (PIRP)(&uniqueValue));
     }
 
-    DBGTRACE(ClassDebugMCN, ("< ClasspMediaChangeDetectionCompletion"));
+    //DBGTRACE(ClassDebugMCN, ("< ClasspMediaChangeDetectionCompletion"));
 
     return STATUS_MORE_PROCESSING_REQUIRED;
 } 
@@ -1223,7 +1223,7 @@ ClasspSendMediaStateIrp(
     //LARGE_INTEGER zero;
     //NTSTATUS status;
 
-    DBGTRACE(ClassDebugMCN, ("> ClasspSendMediaStateIrp"));
+    //DBGTRACE(ClassDebugMCN, ("> ClasspSendMediaStateIrp"));
 
     if (((FdoExtension->CommonExtension.CurrentState != IRP_MN_START_DEVICE) ||
          (FdoExtension->DevicePowerState != PowerDeviceD0)
@@ -1274,7 +1274,7 @@ ClasspSendMediaStateIrp(
             }
         }
 
-        DBGTRACE(ClassDebugMCN, ("< ClasspSendMediaStateIrp - irpInUse"));
+        //DBGTRACE(ClassDebugMCN, ("< ClasspSendMediaStateIrp - irpInUse"));
         return;
 
     }
@@ -1360,7 +1360,7 @@ ClasspSendMediaStateIrp(
             
             requestPending = TRUE;
 
-            DBGTRACE(ClassDebugMCN, ("  ClasspSendMediaStateIrp - calling IoCallDriver."));
+            //DBGTRACE(ClassDebugMCN, ("  ClasspSendMediaStateIrp - calling IoCallDriver."));
             IoCallDriver(FdoExtension->CommonExtension.LowerDeviceObject, irp);
         }
 
@@ -1375,7 +1375,7 @@ ClasspSendMediaStateIrp(
 
     }
 
-    DBGTRACE(ClassDebugMCN, ("< ClasspSendMediaStateIrp"));
+    //DBGTRACE(ClassDebugMCN, ("< ClasspSendMediaStateIrp"));
     
     return;
 } // end ClasspSendMediaStateIrp()
