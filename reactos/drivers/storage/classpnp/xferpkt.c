@@ -386,6 +386,10 @@ VOID NTAPI SetupReadWriteTransferPacket(PTRANSFER_PACKET Pkt,
     logicalBlockAddr = (ULONG)Int64ShrlMod32(DiskLocation.QuadPart, fdoExt->SectorShift);
     numTransferBlocks = Len >> fdoExt->SectorShift;
 
+    DebugPrint((1, "xferpkt.c:401 SetupReadWriteTransferPacket:" 
+               "Pkt - %p, Buf - %p, Len - %x, logicalBlockAddr - %p, numTransferBlocks - %x\n",
+                Pkt, Buf, Len, logicalBlockAddr, numTransferBlocks));
+
     /*
      *  Slap the constant SRB fields in from our pre-initialized template.
      *  We'll then only have to fill in the unique fields for this transfer.
