@@ -1,0 +1,9 @@
+; AHCI driver
+[AddReg]
+HKLM,"SYSTEM\CurrentControlSet\Services\AHCIX","ErrorControl",0x00010001,0x00000000
+HKLM,"SYSTEM\CurrentControlSet\Services\AHCIX","Group",0x00000000,"System Bus Extender"
+HKLM,"SYSTEM\CurrentControlSet\Services\AHCIX","ImagePath",0x00020000,"system32\drivers\ahcix.sys"
+HKLM,"SYSTEM\CurrentControlSet\Services\AHCIX","Start",0x00010001,0x00000000
+HKLM,"SYSTEM\CurrentControlSet\Services\AHCIX","Type",0x00010001,0x00000001
+HKLM,"SYSTEM\CurrentControlSet\Services\AHCIX","Tag",0x00010001,0x00000010
+

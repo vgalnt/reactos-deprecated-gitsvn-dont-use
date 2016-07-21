@@ -1,4 +1,5 @@
 
+add_subdirectory(ahcix)
 add_subdirectory(atax)
 add_subdirectory(atapi)
 add_subdirectory(pciide)
