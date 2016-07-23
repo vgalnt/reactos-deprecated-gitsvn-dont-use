@@ -81,7 +81,7 @@
 #pragma alloc_text(INIT, HalpInitDma)
 #endif
 
-#define MAX_SG_ELEMENTS 0x10
+#define MAX_SG_ELEMENTS 0x20
 
 #ifndef _MINIHAL_
 static KEVENT HalpDmaLock;
