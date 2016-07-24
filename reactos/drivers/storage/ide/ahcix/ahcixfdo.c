@@ -6,6 +6,42 @@
 
 
 NTSTATUS
+AhciXFdoStartDevice(
+    IN PDEVICE_OBJECT DeviceObject,
+    IN PIRP Irp)
+{
+  PFDO_CONTROLLER_EXTENSION  ControllerFdoExtension;
+  PCM_RESOURCE_LIST          ResourcesTranslated;
+  NTSTATUS                   Status;
+
+  DPRINT("AhciXStartDevice(%p %p)\n", DeviceObject, Irp);
+
+  ControllerFdoExtension = (PFDO_CONTROLLER_EXTENSION)DeviceObject->DeviceExtension;
+  ASSERT(ControllerFdoExtension);
+  ASSERT(ControllerFdoExtension->Common.IsFDO);
+
+  // Для функции StartDevice в IRP передается указатель на структуру
+  // PCM_RESOURCE_LIST с ресурсами (могут быть RAW и Translated. см. DDK)
+  ResourcesTranslated = IoGetCurrentIrpStackLocation(Irp)->
+                          Parameters.StartDevice.AllocatedResourcesTranslated;
+
+  if ( !ResourcesTranslated )
+    return STATUS_INVALID_PARAMETER;
+
+  if ( !ResourcesTranslated->Count )
+    return STATUS_INVALID_PARAMETER;
+
+  // Определяем ресурсы
+  Status = AhciXParseTranslatedResources(
+                ControllerFdoExtension,
+                ResourcesTranslated);
+
+  DPRINT("AhciXStartDevice return - %x \n", Status);
+
+  return Status;
+}
+
+NTSTATUS
 AhciXFdoPnpDispatch(
     IN PDEVICE_OBJECT DeviceObject,
     IN PIRP Irp)
