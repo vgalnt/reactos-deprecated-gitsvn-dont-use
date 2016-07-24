@@ -5,6 +5,21 @@
 #include <debug.h>
 
 
+NTSTATUS
+ForwardIrpAndForget(
+    IN PDEVICE_OBJECT DeviceObject,
+    IN PIRP Irp)
+{
+  PDEVICE_OBJECT  LowerDevice;
+
+  ASSERT(((PCOMMON_DEVICE_EXTENSION)DeviceObject->DeviceExtension)->IsFDO);
+  LowerDevice = ((PFDO_CONTROLLER_EXTENSION)DeviceObject->DeviceExtension)->LowerDevice;
+  ASSERT(LowerDevice);
+
+  IoSkipCurrentIrpStackLocation(Irp);
+  return IoCallDriver(LowerDevice, Irp);
+}
+
 DRIVER_DISPATCH AhciXForwardOrIgnore;
 NTSTATUS NTAPI
 AhciXForwardOrIgnore(
