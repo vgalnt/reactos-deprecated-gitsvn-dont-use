@@ -210,7 +210,37 @@ ASSERT(FALSE);
 ASSERT(FALSE);
 
     case IRP_MN_QUERY_CAPABILITIES:            /* 0x09 */
-ASSERT(FALSE);
+    {
+      PDEVICE_CAPABILITIES  DeviceCapabilities;
+      ULONG                 ix;
+
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_CAPABILITIES\n");
+      DeviceCapabilities = (PDEVICE_CAPABILITIES)Stack->Parameters.DeviceCapabilities.Capabilities;
+
+      /* FIXME: capabilities can change with connected device */
+      DeviceCapabilities->LockSupported     = FALSE;
+      DeviceCapabilities->EjectSupported    = FALSE;
+      DeviceCapabilities->Removable         = TRUE;
+      DeviceCapabilities->DockDevice        = FALSE;
+      DeviceCapabilities->UniqueID          = FALSE;
+      DeviceCapabilities->SilentInstall     = FALSE;
+      DeviceCapabilities->RawDeviceOK       = FALSE;
+      DeviceCapabilities->SurpriseRemovalOK = TRUE;
+      DeviceCapabilities->HardwareDisabled  = FALSE;          /* FIXME */
+      //DeviceCapabilities->NoDisplayInUI   = FALSE;          /* FIXME */
+      DeviceCapabilities->DeviceState[0]    = PowerDeviceD0;  /* FIXME */
+
+      for ( ix = 0; ix < PowerSystemMaximum; ix++ )
+        DeviceCapabilities->DeviceState[ix] = PowerDeviceD3;  /* FIXME */
+
+      //DeviceCapabilities->DeviceWake = PowerDeviceUndefined; /* FIXME */
+      DeviceCapabilities->D1Latency = 0; /* FIXME */
+      DeviceCapabilities->D2Latency = 0; /* FIXME */
+      DeviceCapabilities->D3Latency = 0; /* FIXME */
+
+      Status = STATUS_SUCCESS;
+      break;
+    }
 
     case IRP_MN_QUERY_RESOURCES:               /* 0x0a */
       /* This IRP is optional; do nothing */
