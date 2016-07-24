@@ -9,6 +9,11 @@
 #include <..\ahci.h>
 
 
+// Controller Mode
+#define CONTROLLER_COMPATABLE_MODE  0x00
+#define CONTROLLER_NATIVE_MODE      0x01
+#define CONTROLLER_AHCI_MODE        0x02
+
 typedef struct _COMMON_DEVICE_EXTENSION {
   BOOLEAN IsFDO;
 } COMMON_DEVICE_EXTENSION, *PCOMMON_DEVICE_EXTENSION;
