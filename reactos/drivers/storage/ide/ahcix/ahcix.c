@@ -77,6 +77,82 @@ AhciXPnpDispatch(
     return AhciXPdoPnpDispatch(DeviceObject, Irp);
 }
 
+NTSTATUS
+GetBusInterface(
+    IN PFDO_CONTROLLER_EXTENSION ControllerFdoExtension)
+{
+  PBUS_INTERFACE_STANDARD  BusInterface = NULL;
+  KEVENT                   Event;
+  IO_STATUS_BLOCK          IoStatus;
+  PIRP                     Irp;
+  PIO_STACK_LOCATION       Stack;
+  NTSTATUS                 Status = STATUS_UNSUCCESSFUL;
+
+  if ( ControllerFdoExtension->BusInterface )
+  {
+    DPRINT1("We already have the bus interface\n");
+    goto cleanup;
+  }
+
+  BusInterface = ExAllocatePool(PagedPool, sizeof(BUS_INTERFACE_STANDARD));
+  if ( !BusInterface )
+  {
+    DPRINT1("ExAllocatePool() failed\n");
+    Status = STATUS_INSUFFICIENT_RESOURCES;
+    goto cleanup;
+  }
+
+  KeInitializeEvent(&Event, SynchronizationEvent, FALSE);
+
+  Irp = IoBuildSynchronousFsdRequest(
+               IRP_MJ_PNP,
+               ControllerFdoExtension->LowerDevice,
+               NULL,
+               0,
+               NULL,
+               &Event,
+               &IoStatus);
+
+  if ( !Irp )
+  {
+    DPRINT1("IoBuildSynchronousFsdRequest() failed\n");
+    Status = STATUS_INSUFFICIENT_RESOURCES;
+    goto cleanup;
+  }
+
+  Irp->IoStatus.Status = STATUS_NOT_SUPPORTED;
+  Irp->IoStatus.Information = 0;
+
+  Stack = IoGetNextIrpStackLocation(Irp);
+  Stack->MajorFunction = IRP_MJ_PNP;
+  Stack->MinorFunction = IRP_MN_QUERY_INTERFACE;
+  Stack->Parameters.QueryInterface.InterfaceType = (LPGUID)&GUID_BUS_INTERFACE_STANDARD;
+  Stack->Parameters.QueryInterface.Version = 1;
+  Stack->Parameters.QueryInterface.Size = sizeof(BUS_INTERFACE_STANDARD);
+  Stack->Parameters.QueryInterface.Interface = (PINTERFACE)BusInterface;
+  Stack->Parameters.QueryInterface.InterfaceSpecificData = NULL;
+
+  Status = IoCallDriver(ControllerFdoExtension->LowerDevice, Irp);
+  if ( Status == STATUS_PENDING )
+  {
+    KeWaitForSingleObject(&Event, Executive, KernelMode, FALSE, NULL);
+    Status = IoStatus.Status;
+  }
+
+  if ( !NT_SUCCESS(Status) )
+    goto cleanup;
+
+  ControllerFdoExtension->BusInterface = BusInterface;
+  BusInterface = NULL;
+  Status = STATUS_SUCCESS;
+
+cleanup:
+  if ( BusInterface )
+    ExFreePool(BusInterface);
+
+  return Status;
+}
+
 NTSTATUS NTAPI
 AhciXAddDevice(
     IN PDRIVER_OBJECT DriverObject,
@@ -121,7 +197,7 @@ AhciXAddDevice(
   }
 
 ASSERT(FALSE);
-  Status = 0;//GetBusInterface(ControllerFdoExtension);
+  Status = GetBusInterface(ControllerFdoExtension);
 
   if ( !NT_SUCCESS(Status) )
   {
@@ -140,7 +216,7 @@ ASSERT(FALSE);
   if ( BytesRead != PCI_COMMON_HDR_LENGTH )
   {
     DPRINT1("BusInterface->GetBusData() failed()\n");
-    ReleaseBusInterface(ControllerFdoExtension);
+    //ReleaseBusInterface(ControllerFdoExtension);
     IoDetachDevice(ControllerFdoExtension->LowerDevice);
     return STATUS_IO_DEVICE_ERROR;
   }

@@ -4,6 +4,8 @@
 #include <ntifs.h>
 #include <scsi.h>
 #include <ide.h>
+#include <initguid.h>
+#include <wdmguid.h>
 #include <..\ahci.h>
 
 
