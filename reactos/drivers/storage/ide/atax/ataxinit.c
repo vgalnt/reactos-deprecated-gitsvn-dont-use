@@ -1019,3 +1019,79 @@ Responded:
   DPRINT("AtaXDetectDevices return   - %x \n", DeviceResponded);
   return DeviceResponded;
 }
+
+BOOLEAN
+AtaXDetectAhciDevice(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension)
+{
+  PAHCI_MEMORY_REGISTERS  Abar;
+  BOOLEAN                 DeviceResponded = FALSE;
+  ULONG                   ChannelNumber = 0;
+  ULONG                   DeviceType;
+
+  //DPRINT("AtaXDetectAhciDevice (%p)\n", AtaXChannelFdoExtension);
+
+  if ( !AtaXChannelFdoExtension->AhciInterface )    return FALSE;
+  Abar = AtaXChannelFdoExtension->AhciInterface->Abar;
+  if ( !Abar )                                      return FALSE;
+  if ( !Abar->PortsImplemented )                    return FALSE;
+
+  ChannelNumber = AtaXChannelFdoExtension->AhciInterface->AhciChannel;
+  DPRINT("AtaXDetectAhciDevice: ChannelNumber - %x\n", ChannelNumber);
+
+  DeviceType = AtaXChannelFdoExtension->AhciInterface->DeviceType;
+  //AhciSignatureCheck((PAHCI_PORT_REGISTERS)&Abar->PortControl[ChannelNumber]);
+  DPRINT("AtaXDetectAhciDevice: DeviceType - %x\n", DeviceType);
+
+  if ( DeviceType == AtaDrive )
+  {
+    // —читываем паспорт устройства в аппаратное расширение канала
+    if ( AtaXIssueIdentifyAhci(AtaXChannelFdoExtension,
+                               &AtaXChannelFdoExtension->FullIdentifyData[0],
+                               IDE_COMMAND_IDENTIFY) )
+    {
+      DPRINT("AtaXDetectAhciDevice: device %x is SATA\n", ChannelNumber);
+      AtaXChannelFdoExtension->DeviceFlags[0] |= DFLAGS_DEVICE_PRESENT;
+      DeviceResponded = TRUE;
+    }
+  }
+  else if ( DeviceType == AtapiDrive )
+  {
+    // —читываем паспорт устройства в аппаратное расширение канала
+    if ( AtaXIssueIdentifyAhci(AtaXChannelFdoExtension,
+                               &AtaXChannelFdoExtension->FullIdentifyData[0],
+                               IDE_COMMAND_ATAPI_IDENTIFY) )
+    {
+      DPRINT("AtaXDetectAhciDevice: (FIXME AtaXSendInquiry). device %x is SATA ATAPI\n", ChannelNumber);
+
+      //AtaXSendInquiry(AtaXChannelFdoExtension, 0);
+
+      AtaXChannelFdoExtension->DeviceFlags[0] |= DFLAGS_DEVICE_PRESENT;
+      AtaXChannelFdoExtension->DeviceFlags[0] |= DFLAGS_ATAPI_DEVICE;
+      DeviceResponded = TRUE;
+    }
+  }
+  else if ( DeviceType == SEMBdrive ) // Enclosure management bridge
+  {
+    DPRINT("SEMB drive found at port %d\n", ChannelNumber);
+      DeviceResponded = FALSE;//FIXME
+  }
+  else if ( DeviceType == PortMultiplier ) // Port multiplier
+  {
+    DPRINT("PM drive found at port %d\n", ChannelNumber);
+      DeviceResponded = FALSE;//FIXME
+  }
+  else if ( DeviceType == DriveNotResponded ) // Port multiplier
+  {
+    DPRINT("Drive not responded %d\n", ChannelNumber);
+      DeviceResponded = FALSE;//FIXME
+  }
+  else
+  {
+    DPRINT("No drive found at port %d\n", ChannelNumber);
+    //continue;
+      DeviceResponded = FALSE;
+  }
+
+  //DPRINT("AtaXDetectAhciDevice return  - %x \n", DeviceResponded);
+  return DeviceResponded;
+}

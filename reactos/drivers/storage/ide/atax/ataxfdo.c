@@ -1923,7 +1923,6 @@ AtaXChannelFdoQueryDeviceRelations(
   ULONG                   TargetId;
   ULONG                   ix;
   PDEVICE_RELATIONS       DeviceRelations = NULL;
-  BOOLEAN                 IsResponded;
 
   DPRINT("AtaXChannelFdoQueryDeviceRelations (%p %p)\n", AtaXChannelFdo, Irp);
 
@@ -2006,9 +2005,19 @@ AtaXChannelFdoQueryDeviceRelations(
     DPRINT("AtaXChannelFdoQueryDeviceRelations: AtaXDevicePdo - %p, AtaXDevicePdoExtension - %p\n", AtaXDevicePdo, AtaXDevicePdoExtension);
   }
 
-  // Идентификация ATA/ATAPI устройств, подключенных к текущему каналу
-  IsResponded = AtaXDetectDevices(AtaXChannelFdoExtension);
-  DPRINT("AtaXChannelFdoQueryDeviceRelations: AtaXDetectDevices return - %x\n", IsResponded);
+  if ( AtaXChannelFdoExtension->AhciInterface )
+  {
+    // Идентификация AHCI устройства
+    Status = AtaXDetectAhciDevice(AtaXChannelFdoExtension);
+    DPRINT("AtaXChannelFdoQueryDeviceRelations: AtaXDetectAhciDevice return - %x\n", Status);
+
+  }
+  else
+  {
+    // Идентификация ATA/ATAPI устройств, подключенных к текущему каналу
+    Status = AtaXDetectDevices(AtaXChannelFdoExtension);
+    DPRINT("AtaXChannelFdoQueryDeviceRelations: AtaXDetectDevices return - %x\n", Status);
+  }
 
   // Создаем и заполняем структуру DEVICE_RELATIONS.
   // Указатель на нее (DeviceRelations) сохраняем в Irp->IoStatus.Information
