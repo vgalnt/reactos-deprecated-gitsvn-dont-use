@@ -1224,6 +1224,8 @@ Return Value:
         return STATUS_SUCCESS;
     }
 
+    DPRINT(" CdRomStartDevice: FILE_DEVICE_DVD\n");
+#if 0
     //
     // we got a DVD drive.
     // now, figure out if we have a RPC0 device
@@ -1308,6 +1310,9 @@ Return Value:
     }
 
     ExFreePool (copyProtectKey);
+
+#endif
+cddata->PickDvdRegion = 0;// TypeCode of zero means that no region has been set.
 
     return STATUS_SUCCESS;
 }
