@@ -1,6 +1,6 @@
 #include "pciidex.h"
 
-//#define NDEBUG
+#define NDEBUG
 #include <debug.h>
 
 //#define MAX_SG_ELEMENTS 0x20 <-- in reactos\hal\halx86\generic\dma.c
