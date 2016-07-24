@@ -194,15 +194,77 @@ AhciXPdoQueryDeviceText(
 }
 
 NTSTATUS
+AhciXPdoQueryResourceRequirements(
+    IN PPDO_CHANNEL_EXTENSION ChannelPdoExtension,
+    IN PIRP Irp,
+    OUT ULONG_PTR* Information)
+{
+  PIO_RESOURCE_REQUIREMENTS_LIST  RequirementsList;
+  PIO_RESOURCE_DESCRIPTOR         Descriptor;
+  ULONG                           ListSize;
+  PFDO_CONTROLLER_EXTENSION       ControllerFdoExtension;
+
+  ControllerFdoExtension = (PFDO_CONTROLLER_EXTENSION)
+                           ChannelPdoExtension->ControllerFdo->DeviceExtension;
+
+  // только AHCI режим. FIXME: SATA режим
+  ListSize = sizeof(IO_RESOURCE_REQUIREMENTS_LIST);
+       //+ 1 * sizeof(IO_RESOURCE_DESCRIPTOR);
+
+  RequirementsList = ExAllocatePool(PagedPool, ListSize);
+
+  if ( !RequirementsList )
+    return STATUS_INSUFFICIENT_RESOURCES;
+
+  RtlZeroMemory(RequirementsList, ListSize);
+
+  RequirementsList->ListSize         = ListSize;
+  RequirementsList->AlternativeLists = 1;
+
+  RequirementsList->List[0].Version  = 1;
+  RequirementsList->List[0].Revision = 1;
+  RequirementsList->List[0].Count    = 1; //2
+
+  Descriptor = &RequirementsList->List[0].Descriptors[0];
+
+  /* base */
+  //Descriptor->Option           = 0; /* Required */
+  //Descriptor->Type             = CmResourceTypeMemory;
+  //Descriptor->ShareDisposition = CmResourceShareDeviceExclusive;
+  //Descriptor->Flags            = CM_RESOURCE_MEMORY_READ_WRITE;
+  //
+  //Descriptor->u.Memory.Length    = 0x1100;
+  //Descriptor->u.Memory.Alignment = 1;
+  //Descriptor->u.Memory.MinimumAddress.QuadPart = (ULONGLONG)Base;
+  //Descriptor->u.Memory.MaximumAddress.QuadPart = (ULONGLONG)(Base + 0x1100 - 1);
+
+  //Descriptor++;
+
+  /* Interrupt */
+  Descriptor->Option           = 0; /* Required */
+  Descriptor->Type             = CmResourceTypeInterrupt;
+  Descriptor->ShareDisposition = CmResourceShareShared;
+  Descriptor->Flags            = CM_RESOURCE_INTERRUPT_LEVEL_SENSITIVE;  //(?? CM_RESOURCE_INTERRUPT_LATCHED == CM_RESOURCE_INTERRUPT_LEVEL_LATCHED_BITS);
+
+  Descriptor->u.Interrupt.MinimumVector = ControllerFdoExtension->PciConfig.u.type0.InterruptLine;
+  Descriptor->u.Interrupt.MaximumVector = ControllerFdoExtension->PciConfig.u.type0.InterruptLine;
+
+  *Information = (ULONG_PTR)RequirementsList;
+  return STATUS_SUCCESS;
+}
+
+NTSTATUS
 AhciXPdoPnpDispatch(
     IN PDEVICE_OBJECT ChannelPdo,
     IN PIRP Irp)
 {
+  PPDO_CHANNEL_EXTENSION     ChannelPdoExtension;
   ULONG_PTR                  Information;
   PIO_STACK_LOCATION         Stack;
   ULONG                      MinorFunction;
   NTSTATUS                   Status;
 
+  ChannelPdoExtension = (PPDO_CHANNEL_EXTENSION)ChannelPdo->DeviceExtension;
   Information = Irp->IoStatus.Information;
   Stack = IoGetCurrentIrpStackLocation(Irp);
   MinorFunction = Stack->MinorFunction;
@@ -297,7 +359,7 @@ ASSERT(FALSE);
 
     case IRP_MN_QUERY_RESOURCE_REQUIREMENTS:   /* 0x0b */
       DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_RESOURCE_REQUIREMENTS\n");
-ASSERT(FALSE);
+      Status = AhciXPdoQueryResourceRequirements(ChannelPdoExtension, Irp, &Information);
       break;
 
     case IRP_MN_QUERY_DEVICE_TEXT:             /* 0x0c */
