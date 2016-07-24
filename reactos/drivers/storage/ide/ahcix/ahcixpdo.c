@@ -321,7 +321,26 @@ ASSERT(FALSE);
        break;
 
     case IRP_MN_QUERY_BUS_INFORMATION:         /* 0x15 */
-ASSERT(FALSE);
+    {
+      PPNP_BUS_INFORMATION BusInfo;
+
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_BUS_INFORMATION\n");
+      BusInfo = (PPNP_BUS_INFORMATION)
+                ExAllocatePool(PagedPool, sizeof(PNP_BUS_INFORMATION));
+
+      if ( !BusInfo )
+      {
+        Status = STATUS_INSUFFICIENT_RESOURCES;
+      }
+      else
+      {
+        BusInfo->LegacyBusType = PNPBus;
+        BusInfo->BusNumber = 0; /* FIXME */
+        Information = (ULONG_PTR)BusInfo;
+        Status = STATUS_SUCCESS;
+      }
+      break;
+    }
 
     default:
       // We can't forward request to the lower driver, because we are a Pdo, so we don't have lower driver...
