@@ -1,6 +1,7 @@
 #ifndef _AHCIX_PCH_
 #define _AHCIX_PCH_
 
+#include <stdio.h>
 #include <ntifs.h>
 #include <scsi.h>
 #include <ide.h>

@@ -6,6 +6,102 @@
 
 
 NTSTATUS
+AhciXPdoQueryId(
+    IN PDEVICE_OBJECT DeviceObject,
+    IN PIRP Irp,
+    OUT ULONG_PTR* Information)
+{
+  PPDO_CHANNEL_EXTENSION     DeviceExtension;
+  PFDO_CONTROLLER_EXTENSION  ControllerFdoExtension;
+  WCHAR                      Buffer[256];
+  ULONG                      Index = 0;
+  ULONG                      IdType;
+  UNICODE_STRING             SourceString;
+  UNICODE_STRING             String;
+  NTSTATUS                   Status;
+
+  IdType = IoGetCurrentIrpStackLocation(Irp)->Parameters.QueryId.IdType;
+  DeviceExtension = (PPDO_CHANNEL_EXTENSION)DeviceObject->DeviceExtension;
+  ControllerFdoExtension = (PFDO_CONTROLLER_EXTENSION)
+                           DeviceExtension->ControllerFdo->DeviceExtension;
+  
+  switch ( IdType )
+  {
+    case BusQueryDeviceID:
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_ID / BusQueryDeviceID\n");
+      RtlInitUnicodeString(&SourceString, L"AHCI\\IDEChannel");
+      break;
+
+    case BusQueryHardwareIDs:
+    {
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_ID / BusQueryHardwareIDs\n");
+    
+      switch ( ControllerFdoExtension->VendorId )
+      {
+        case 0x8086:
+        {
+          switch (ControllerFdoExtension->DeviceId)
+          {
+            case 0x2829: //SATA controller [0106]: Intel Corporation 82801HM/HEM (ICH8M/ICH8M-E) SATA Controller [AHCI mode] [8086:2829] (rev 02)
+              Index += swprintf(&Buffer[Index], L"Intel-ICH8M") + 1;
+              break;
+
+            default:
+              Index += swprintf(&Buffer[Index], L"Intel-%04x", ControllerFdoExtension->DeviceId) + 1;
+              break;
+          }
+          break;
+        }
+
+        default:
+          DPRINT("BusQueryCompatibleIDs / VendorId - %x\n", ControllerFdoExtension->VendorId);
+          break;
+      }
+
+      if (DeviceExtension->AhciInterface.Channel == 0)
+        Index += swprintf(&Buffer[Index], L"Primary_IDE_Channel") + 1;
+      else
+        Index += swprintf(&Buffer[Index], L"Secondary_IDE_Channel") + 1;
+
+      Index += swprintf(&Buffer[Index], L"*PNP0600") + 1;
+      Buffer[Index] = UNICODE_NULL;
+
+      SourceString.Length = SourceString.MaximumLength = Index * sizeof(WCHAR);
+      SourceString.Buffer = Buffer;
+
+      break;
+    }
+
+    case BusQueryCompatibleIDs:
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_ID / BusQueryCompatibleIDs\n");
+      Index += swprintf(&Buffer[Index], L"*PNP0600") + 1;
+      Buffer[Index] = UNICODE_NULL;
+      SourceString.Length = SourceString.MaximumLength = Index * sizeof(WCHAR);
+      SourceString.Buffer = Buffer;
+      break;
+
+    case BusQueryInstanceID:
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_ID / BusQueryInstanceID\n");
+      swprintf(Buffer, L"%lu", DeviceExtension->AhciInterface.Channel);
+      RtlInitUnicodeString(&SourceString, Buffer);
+      break;
+
+    default:
+      DPRINT1("IRP_MJ_PNP / IRP_MN_QUERY_ID / unknown query id type 0x%lx\n", IdType);
+      ASSERT(FALSE);
+      return STATUS_NOT_SUPPORTED;
+  }
+  
+  Status = DuplicateUnicodeString(
+                    RTL_DUPLICATE_UNICODE_STRING_NULL_TERMINATE,
+                    &SourceString,
+                    &String);
+
+  *Information = (ULONG_PTR)String.Buffer;
+  return Status;
+}
+
+NTSTATUS
 AhciXPdoPnpDispatch(
     IN PDEVICE_OBJECT ChannelPdo,
     IN PIRP Irp)
@@ -93,7 +189,7 @@ ASSERT(FALSE);
       break;
 
     case IRP_MN_QUERY_ID:                      /* 0x13 */
-ASSERT(FALSE);
+      Status = AhciXPdoQueryId(ChannelPdo, Irp, &Information);
       break;
 
     case IRP_MN_QUERY_PNP_DEVICE_STATE:        /* 0x14 */
