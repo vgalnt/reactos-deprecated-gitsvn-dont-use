@@ -26,6 +26,9 @@ Revision History:
 
 #include "cdrom.h"
 
+#define NDEBUG
+#include <debug.h>
+
 #ifdef ALLOC_PRAGMA
 
 #pragma alloc_text(INIT, DriverEntry)
@@ -1224,7 +1227,7 @@ Return Value:
         return STATUS_SUCCESS;
     }
 
-    DPRINT(" CdRomStartDevice: FILE_DEVICE_DVD\n");
+    DPRINT("FIXME: CdRomStartDevice: FILE_DEVICE_DVD\n");
 #if 0
     //
     // we got a DVD drive.
