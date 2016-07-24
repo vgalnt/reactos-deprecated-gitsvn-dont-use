@@ -5,6 +5,13 @@
 #include <debug.h>
 
 
+DRIVER_UNLOAD AhciXUnload;
+VOID NTAPI 
+AhciXUnload(IN PDRIVER_OBJECT DriverObject)
+{
+  DPRINT1("AhciX Unload ... \n");
+}
+
 NTSTATUS NTAPI
 DriverEntry(
     IN PDRIVER_OBJECT DriverObject,
