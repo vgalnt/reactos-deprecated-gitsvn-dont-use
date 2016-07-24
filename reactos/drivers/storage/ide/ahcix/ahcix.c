@@ -78,6 +78,82 @@ AhciXPnpDispatch(
 }
 
 NTSTATUS NTAPI
+AhciXAddDevice(
+    IN PDRIVER_OBJECT DriverObject,
+    IN PDEVICE_OBJECT ControllerPdo)
+{
+  PDEVICE_OBJECT             ControllerFdo;
+  PFDO_CONTROLLER_EXTENSION  ControllerFdoExtension;
+  ULONG                      BytesRead;
+  NTSTATUS                   Status;
+
+  DPRINT("AhciXAddDevice(%p %p)\n", DriverObject, ControllerPdo);
+
+  Status = IoCreateDevice(
+             DriverObject,
+             sizeof(FDO_CONTROLLER_EXTENSION),
+             NULL,
+             FILE_DEVICE_BUS_EXTENDER,
+             FILE_DEVICE_SECURE_OPEN,
+             TRUE,
+             &ControllerFdo);
+
+  if ( !NT_SUCCESS(Status) )
+  {
+    DPRINT1("IoCreateDevice() failed with status 0x%08lx\n", Status);
+    return Status;
+  }
+
+  ControllerFdoExtension = (PFDO_CONTROLLER_EXTENSION)ControllerFdo->DeviceExtension;
+  RtlZeroMemory(ControllerFdoExtension, sizeof(FDO_CONTROLLER_EXTENSION));
+
+  ControllerFdoExtension->Common.IsFDO = TRUE;
+
+  Status = IoAttachDeviceToDeviceStackSafe(
+             ControllerFdo,
+             ControllerPdo,
+             &ControllerFdoExtension->LowerDevice);
+
+  if ( !NT_SUCCESS(Status) )
+  {
+    DPRINT1("IoAttachDeviceToDeviceStackSafe() failed with status 0x%08lx\n", Status);
+    return Status;
+  }
+
+ASSERT(FALSE);
+  Status = 0;//GetBusInterface(ControllerFdoExtension);
+
+  if ( !NT_SUCCESS(Status) )
+  {
+    DPRINT("GetBusInterface() failed with status 0x%08lx\n", Status);
+    IoDetachDevice(ControllerFdoExtension->LowerDevice);
+    return Status;
+  }
+
+  BytesRead = (*ControllerFdoExtension->BusInterface->GetBusData)(
+                          ControllerFdoExtension->BusInterface->Context,
+                          PCI_WHICHSPACE_CONFIG,
+                          &ControllerFdoExtension->PciConfig,
+                          0,
+                          PCI_COMMON_HDR_LENGTH);
+
+  if ( BytesRead != PCI_COMMON_HDR_LENGTH )
+  {
+    DPRINT1("BusInterface->GetBusData() failed()\n");
+    ReleaseBusInterface(ControllerFdoExtension);
+    IoDetachDevice(ControllerFdoExtension->LowerDevice);
+    return STATUS_IO_DEVICE_ERROR;
+  }
+
+ASSERT(FALSE);
+  Status = 0;//AhciXFindMassStorageController(ControllerFdoExtension, &ControllerFdoExtension->PciConfig);
+
+  ControllerFdo->Flags &= ~DO_DEVICE_INITIALIZING;
+
+  return STATUS_SUCCESS;
+}
+
+NTSTATUS NTAPI
 DriverEntry(
     IN PDRIVER_OBJECT DriverObject,
     IN PUNICODE_STRING RegistryPath)
