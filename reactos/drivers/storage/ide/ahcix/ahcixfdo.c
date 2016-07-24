@@ -5,6 +5,49 @@
 #include <debug.h>
 
 
+AHCI_DEVICE_TYPE
+AhciSignatureCheck(IN PAHCI_PORT_REGISTERS PortControl)
+{
+  AHCI_SATA_STATUS  SataStatus;
+  UCHAR             DeviceDetection;
+  //UCHAR           Ipm;
+
+  SataStatus = PortControl->SataStatus;
+  DeviceDetection = SataStatus.DeviceDetection;
+  //Ipm = (SataStatus.AsULONG >> 8) & 0x0F;
+
+  DPRINT("AhciSignatureCheck: PortControl     - %p\n", PortControl);
+  DPRINT("AhciSignatureCheck: SataStatus      - %p\n", SataStatus);
+  DPRINT("AhciSignatureCheck: DeviceDetection - %p\n", DeviceDetection);
+
+  // Check drive status
+  if ( DeviceDetection == 0 )
+    return NoDrive;
+
+  //if (Ipm != 1)
+  //  return 0;
+
+  DPRINT("AhciSignatureCheck: PortControl->Signature - %p\n", PortControl->Signature);
+
+  switch ( PortControl->Signature )
+  {
+    case 0x00000101:			// 1  SATA ATA
+      return AtaDrive;
+
+    case 0xEB140101:			// 2  SATA ATAPI
+      return AtapiDrive;
+
+    case 0xC33C0101:			// 3  Enclosure management bridge
+      return SEMBdrive;
+
+    case 0x96690101:			// 4  Port multiplier
+      return PortMultiplier;
+
+    default:				// 5
+      return DriveNotResponded;
+  }
+}
+
 NTSTATUS
 AhciXFdoQueryBusRelations(
     IN PDEVICE_OBJECT DeviceObject,
@@ -39,8 +82,7 @@ AhciXFdoQueryBusRelations(
       {
         DPRINT("AhciXFdoQueryBusRelations: ix - %x\n", ix);
 
-ASSERT(FALSE);
-        DeviceType = 0;//AhciSignatureCheck((PAHCI_PORT_REGISTERS)&Abar->PortControl[ix]);
+        DeviceType = AhciSignatureCheck((PAHCI_PORT_REGISTERS)&Abar->PortControl[ix]);
         ControllerFdoExtension->DeviceType[ix] = DeviceType;
         DPRINT("AhciXFdoQueryBusRelations: AhciSignatureCheck return - %x\n", DeviceType);
 
