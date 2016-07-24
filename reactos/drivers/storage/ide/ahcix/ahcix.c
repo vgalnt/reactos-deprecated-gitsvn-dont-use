@@ -65,6 +65,18 @@ AhciXUnload(IN PDRIVER_OBJECT DriverObject)
   DPRINT1("AhciX Unload ... \n");
 }
 
+DRIVER_DISPATCH AhciXPnpDispatch;
+NTSTATUS NTAPI
+AhciXPnpDispatch(
+    IN PDEVICE_OBJECT DeviceObject,
+    IN PIRP Irp)
+{
+  if ( ((PCOMMON_DEVICE_EXTENSION)DeviceObject->DeviceExtension)->IsFDO )
+    return AhciXFdoPnpDispatch(DeviceObject, Irp);
+  else
+    return AhciXPdoPnpDispatch(DeviceObject, Irp);
+}
+
 NTSTATUS NTAPI
 DriverEntry(
     IN PDRIVER_OBJECT DriverObject,
