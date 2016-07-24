@@ -5,6 +5,44 @@
 #include <debug.h>
 
 
+VOID
+AhciXPortStop(IN PAHCI_PORT_REGISTERS Port)
+{
+  AHCI_PORT_COMMAND  Command;
+
+  // Stop command engine 
+
+  Command.AsULONG = READ_REGISTER_ULONG((PULONG)&Port->Command);
+  //DPRINT("AhciXPortStop: Command - %p\n", Command);
+  Command.Start = 0;
+  WRITE_REGISTER_ULONG((PULONG)&Port->Command, Command.AsULONG);
+
+  while( 1 )
+  {
+    Command.AsULONG = READ_REGISTER_ULONG((PULONG)&Port->Command);
+    if ( Command.CmdListRunning )
+      continue;
+
+    break;
+  }
+
+  Command.AsULONG = READ_REGISTER_ULONG((PULONG)&Port->Command);
+  Command.FISReceiveEnable = 0;
+  WRITE_REGISTER_ULONG((PULONG)&Port->Command, Command.AsULONG);
+
+  while( 1 )
+  {
+    Command.AsULONG = READ_REGISTER_ULONG((PULONG)&Port->Command);
+    if ( Command.FISReceiveRunning )
+      continue;
+
+    break;
+  }
+
+  Command.AsULONG = READ_REGISTER_ULONG((PULONG)&Port->Command);
+  //DPRINT("AhciXPortStop: Command - %p\n", Command);
+}
+
 NTSTATUS
 AhciXChannelInit(
     IN PPDO_CHANNEL_EXTENSION ChannelPdoExtension,
@@ -92,8 +130,7 @@ AhciXChannelInit(
   ChannelPdoExtension->AhciInterface.DmaBuffer = DmaBuffer;
   DPRINT("AhciXChannelInit: DmaBuffer - %p\n", DmaBuffer);
 
-ASSERT(FALSE);
-  //AhciXPortStop(Port);
+  AhciXPortStop(Port);
 
   // 0x00 PxCLB  Command List Base Address, 1024 byte - aligned
   CmdListBaseAddress = (PAHCI_COMMAND_LIST)(AhciBuffer + 32 * sizeof(AHCI_COMMAND_TABLE));
