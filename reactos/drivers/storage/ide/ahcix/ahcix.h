@@ -15,6 +15,24 @@
 #define CONTROLLER_NATIVE_MODE      0x01
 #define CONTROLLER_AHCI_MODE        0x02
 
+//
+// Определения команд для ATA/ATAPI устройств 
+//
+#define IDE_COMMAND_READ_DMA         0xC8
+#define IDE_COMMAND_WRITE_DMA        0xCA
+#define IDE_COMMAND_IDENTIFY         0xEC
+
+#define IDE_COMMAND_ATAPI_PACKET     0xA0
+#define IDE_COMMAND_ATAPI_IDENTIFY   0xA1
+
+#define IDE_COMMAND_SET_FEATURES     0xEF
+
+//
+// Определения команд для ATAPI устройств
+//
+#define ATAPI_MODE_SENSE             0x5A
+
+
 typedef struct _COMMON_DEVICE_EXTENSION {
   BOOLEAN IsFDO;
 } COMMON_DEVICE_EXTENSION, *PCOMMON_DEVICE_EXTENSION;
