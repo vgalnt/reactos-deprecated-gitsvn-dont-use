@@ -147,6 +147,53 @@ AhciXPdoQueryId(
 }
 
 NTSTATUS
+AhciXPdoQueryDeviceText(
+    IN PDEVICE_OBJECT DeviceObject,
+    IN PIRP Irp,
+    OUT ULONG_PTR* Information)
+{
+  PPDO_CHANNEL_EXTENSION  DeviceExtension;
+  ULONG                   DeviceTextType;
+  PCWSTR                  SourceString;
+  UNICODE_STRING          String;
+  
+  DeviceTextType = IoGetCurrentIrpStackLocation(Irp)->Parameters.QueryDeviceText.DeviceTextType;
+  DeviceExtension = (PPDO_CHANNEL_EXTENSION)DeviceObject->DeviceExtension;
+  
+  switch ( DeviceTextType )
+  {
+    case DeviceTextDescription:
+    case DeviceTextLocationInformation:
+    {
+      DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_TEXT / %S\n",
+      DeviceTextType == DeviceTextDescription ? L"DeviceTextDescription" : L"DeviceTextLocationInformation");
+  
+      if (DeviceExtension->AhciInterface.Channel == 0)
+        SourceString = L"Primary channel";
+      else
+        SourceString = L"Secondary channel";
+  
+      break;
+    }
+
+    default:
+      DPRINT1("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_TEXT / unknown type 0x%lx\n", DeviceTextType);
+      ASSERT(FALSE);
+      return STATUS_NOT_SUPPORTED;
+  }
+  
+  if ( RtlCreateUnicodeString(&String, SourceString) )
+  {
+    *Information = (ULONG_PTR)String.Buffer;
+    return STATUS_SUCCESS;
+  }
+  else
+  {
+    return STATUS_INSUFFICIENT_RESOURCES;
+  }
+}
+
+NTSTATUS
 AhciXPdoPnpDispatch(
     IN PDEVICE_OBJECT ChannelPdo,
     IN PIRP Irp)
@@ -254,7 +301,7 @@ ASSERT(FALSE);
       break;
 
     case IRP_MN_QUERY_DEVICE_TEXT:             /* 0x0c */
-ASSERT(FALSE);
+      Status = AhciXPdoQueryDeviceText(ChannelPdo, Irp, &Information);
       break;
 
     case IRP_MN_FILTER_RESOURCE_REQUIREMENTS:  /* 0x0d */
