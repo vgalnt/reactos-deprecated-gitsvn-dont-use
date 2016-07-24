@@ -283,12 +283,15 @@ AhciXPdoPnpDispatch(
     IN PIRP Irp)
 {
   PPDO_CHANNEL_EXTENSION     ChannelPdoExtension;
+  PFDO_CONTROLLER_EXTENSION  ControllerFdoExtension;
   ULONG_PTR                  Information;
   PIO_STACK_LOCATION         Stack;
   ULONG                      MinorFunction;
   NTSTATUS                   Status;
 
   ChannelPdoExtension = (PPDO_CHANNEL_EXTENSION)ChannelPdo->DeviceExtension;
+  ControllerFdoExtension = (PFDO_CONTROLLER_EXTENSION)ChannelPdoExtension->ControllerFdo->DeviceExtension;
+
   Information = Irp->IoStatus.Information;
   Stack = IoGetCurrentIrpStackLocation(Irp);
   MinorFunction = Stack->MinorFunction;
@@ -340,7 +343,65 @@ ASSERT(FALSE);
       break;
 
     case IRP_MN_QUERY_INTERFACE:               /* 0x08 */
-ASSERT(FALSE);
+    {
+      // It get pseudo Interface. QueryInterface.Size - type Interface. QueryInterface.Interface - pointer on Interface.
+      if ( IsEqualGUIDAligned(Stack->Parameters.QueryInterface.InterfaceType, &GUID_BUS_INTERFACE_STANDARD) )
+      {
+        switch ( Stack->Parameters.QueryInterface.Size )
+        {
+          case 1:  // QueryControllerProperties
+            DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QueryControllerProperties. NOT_SUPPORTED\n");
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+
+          case 3:  // QueryPciBusInterface
+            DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QueryPciBusInterface\n");
+            *(PVOID *)Stack->Parameters.QueryInterface.Interface = ControllerFdoExtension->BusInterface;
+            DPRINT("AhciXPdoPnpDispatch: BusInterface - %p\n", ControllerFdoExtension->BusInterface);
+            Status = STATUS_SUCCESS;
+            break;
+
+          case 5:  // QueryBusMasterInterface
+            DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QueryBusMasterInterface. NOT_SUPPORTED\n");
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+
+          case 7:  // QueryAhciInterface
+            DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QueryAhciInterface\n");
+            if ( ControllerFdoExtension->AhciRegisters )
+            {
+              ChannelPdoExtension->AhciInterface.AhciStartIo   = (PAHCI_START_IO)AhciSendCommand;
+              ChannelPdoExtension->AhciInterface.AhciInterrupt = (PAHCI_INTERRUPT)AhciInterruptRoutine;
+
+              *(PVOID *)Stack->Parameters.QueryInterface.Interface = &ChannelPdoExtension->AhciInterface;
+              Status = STATUS_SUCCESS;
+            }
+            else
+            {
+              Status = STATUS_NOT_IMPLEMENTED;
+            }
+            break;
+
+          case 9: //QuerySataInterface
+            DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / QuerySataInterface. NOT_SUPPORTED\n");
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+
+          default:
+            DPRINT1("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / Unknown Size FIXME\n");
+            Status = STATUS_NOT_SUPPORTED;
+            break;
+        }
+        break;
+      }
+      else
+      {
+        DPRINT1("IRP_MJ_PNP / IRP_MN_QUERY_INTERFACE / Unknown type\n");
+        ASSERT(FALSE);
+        Status = STATUS_NOT_SUPPORTED;
+        break;
+      }
+    }
 
     case IRP_MN_QUERY_CAPABILITIES:            /* 0x09 */
     {
