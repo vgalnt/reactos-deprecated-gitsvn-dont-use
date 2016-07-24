@@ -491,6 +491,7 @@ typedef struct _AHCI_INTERFACE {
   // port interface
   ULONG                     Channel;                    // логический канал (порядковый номер)
   ULONG                     AhciChannel;                // физический канал (Ports Implemented) (0 ... 31)
+  AHCI_DEVICE_TYPE          DeviceType;
 
 
   PAHCI_START_IO            AhciStartIo;
