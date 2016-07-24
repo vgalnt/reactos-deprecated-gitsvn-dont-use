@@ -6,6 +6,69 @@
 
 
 NTSTATUS
+AhciXFdoQueryBusRelations(
+    IN PDEVICE_OBJECT DeviceObject,
+    OUT PDEVICE_RELATIONS* pDeviceRelations)
+{
+  PFDO_CONTROLLER_EXTENSION  ControllerFdoExtension;
+  PDEVICE_RELATIONS          DeviceRelations = NULL;
+  PAHCI_MEMORY_REGISTERS     Abar;
+  ULONG                      PortsImplemented;
+  ULONG                      ix, jx;
+  ULONG                      PDOs = 0;
+
+  DPRINT("AhciXFdoQueryBusRelations(%p %p)\n", DeviceObject, pDeviceRelations);
+
+  ControllerFdoExtension = (PFDO_CONTROLLER_EXTENSION)DeviceObject->DeviceExtension;
+  ASSERT(ControllerFdoExtension);
+  ASSERT(ControllerFdoExtension->Common.IsFDO);
+
+  Abar = ControllerFdoExtension->AhciRegisters;
+  PortsImplemented = Abar->PortsImplemented;
+
+  if ( Abar && PortsImplemented )
+  {
+ASSERT(FALSE);
+  }
+
+  if ( PDOs == 0 )
+  {
+    DeviceRelations = (PDEVICE_RELATIONS)
+                      ExAllocatePool(PagedPool, sizeof(DEVICE_RELATIONS));
+  }
+  else
+  {
+    DeviceRelations = (PDEVICE_RELATIONS)
+                      ExAllocatePool(PagedPool,
+                                     sizeof(DEVICE_RELATIONS) + 
+                                     sizeof(PDEVICE_OBJECT) * (PDOs - 1));
+
+    ControllerFdoExtension->ChannelsCount = PDOs;
+  }
+
+  if ( !DeviceRelations )
+    return STATUS_INSUFFICIENT_RESOURCES;
+
+  DeviceRelations->Count = PDOs;
+
+  if ( PDOs )
+  {
+    for ( ix = 0, jx = 0; ix < 32; ix++ )
+    {
+      if ( ControllerFdoExtension->ChannelPdo[ix] )
+      {
+        ObReferenceObject(ControllerFdoExtension->ChannelPdo[ix]);
+        DeviceRelations->Objects[jx++] = ControllerFdoExtension->ChannelPdo[ix];
+      }
+    }
+  }
+
+  *pDeviceRelations = DeviceRelations;
+
+  return STATUS_SUCCESS;
+}
+
+NTSTATUS
 AhciXParseTranslatedResources(
     IN PFDO_CONTROLLER_EXTENSION ControllerFdoExtension,
     IN PCM_RESOURCE_LIST ResourcesTranslated)
@@ -213,8 +276,7 @@ AhciXFdoPnpDispatch(
         {
           PDEVICE_RELATIONS DeviceRelations = NULL;
           DPRINT("IRP_MJ_PNP / IRP_MN_QUERY_DEVICE_RELATIONS / BusRelations\n");
-ASSERT(FALSE);
-          Status = 0;//AhciXFdoQueryBusRelations(DeviceObject, &DeviceRelations);
+          Status = AhciXFdoQueryBusRelations(DeviceObject, &DeviceRelations);
           Information = (ULONG_PTR)DeviceRelations;
           break;
         }
