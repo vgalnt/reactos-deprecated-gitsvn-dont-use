@@ -31,4 +31,16 @@ typedef struct _PDO_CHANNEL_EXTENSION
 
 } PDO_CHANNEL_EXTENSION, *PPDO_CHANNEL_EXTENSION;
 
+//---------------------------------------------------
+/* ahcix.c */
+
+/* ahcixfdo.c */
+NTSTATUS
+AhciXFdoPnpDispatch(
+    IN PDEVICE_OBJECT DeviceObject,
+    IN PIRP Irp);
+
+/* ahcixpdo.c */
+
+
 #endif /* _AHCIX_PCH_ */
