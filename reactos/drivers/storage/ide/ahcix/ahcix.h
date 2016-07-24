@@ -44,6 +44,15 @@ typedef struct _PDO_CHANNEL_EXTENSION
 
 //---------------------------------------------------
 /* ahcix.c */
+NTSTATUS
+ForwardIrpAndWait(
+    IN PDEVICE_OBJECT DeviceObject,
+    IN PIRP Irp);
+
+NTSTATUS
+ForwardIrpAndForget(
+    IN PDEVICE_OBJECT DeviceObject,
+    IN PIRP Irp);
 
 /* ahcixfdo.c */
 NTSTATUS
