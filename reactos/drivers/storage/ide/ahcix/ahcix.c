@@ -153,6 +153,23 @@ cleanup:
   return Status;
 }
 
+NTSTATUS
+ReleaseBusInterface(
+    IN PFDO_CONTROLLER_EXTENSION ControllerFdoExtension)
+{
+  NTSTATUS  Status = STATUS_UNSUCCESSFUL;
+
+  if ( ControllerFdoExtension->BusInterface )
+  {
+    (*ControllerFdoExtension->BusInterface->InterfaceDereference)(
+                ControllerFdoExtension->BusInterface->Context);
+                ControllerFdoExtension->BusInterface = NULL;
+                Status = STATUS_SUCCESS;
+  }
+
+  return Status;
+}
+
 NTSTATUS NTAPI
 AhciXAddDevice(
     IN PDRIVER_OBJECT DriverObject,
@@ -216,7 +233,7 @@ ASSERT(FALSE);
   if ( BytesRead != PCI_COMMON_HDR_LENGTH )
   {
     DPRINT1("BusInterface->GetBusData() failed()\n");
-    //ReleaseBusInterface(ControllerFdoExtension);
+    ReleaseBusInterface(ControllerFdoExtension);
     IoDetachDevice(ControllerFdoExtension->LowerDevice);
     return STATUS_IO_DEVICE_ERROR;
   }
