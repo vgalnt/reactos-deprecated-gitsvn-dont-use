@@ -29,6 +29,7 @@ typedef struct _FDO_CONTROLLER_EXTENSION {
   USHORT                   DeviceId;
   ULONG                    ControllerMode;  // 2 - AHCI, 1 - Native, 0 - Compatible
   PAHCI_MEMORY_REGISTERS   AhciRegisters;
+  AHCI_INTERRUPT_RESOURCE  InterruptResource;
 
 
 } FDO_CONTROLLER_EXTENSION, *PFDO_CONTROLLER_EXTENSION;
