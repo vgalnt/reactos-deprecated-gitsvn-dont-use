@@ -440,6 +440,19 @@ typedef struct _AHCI_MEMORY_REGISTERS {
   
 } AHCI_MEMORY_REGISTERS, *PAHCI_MEMORY_REGISTERS;
 
+//------------------------------------------------
+// Device type 
+typedef enum  {
+
+  NoDrive = 0,
+  AtaDrive,
+  AtapiDrive,
+  SEMBdrive,
+  PortMultiplier,
+  DriveNotResponded
+
+} AHCI_DEVICE_TYPE;
+
 typedef struct _AHCI_INTERRUPT_RESOURCE {
 
   UCHAR        InterruptShareDisposition;
