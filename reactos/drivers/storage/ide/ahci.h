@@ -492,7 +492,15 @@ typedef struct _AHCI_INTERFACE {
   ULONG                     Channel;                    // логический канал (порядковый номер)
   ULONG                     AhciChannel;                // физический канал (Ports Implemented) (0 ... 31)
   AHCI_DEVICE_TYPE          DeviceType;
-
+  ULONG_PTR                 DmaBuffer;                  // 128 Kb (Maximum bytes transfer buffer)
+  ULONG                     AhciBuffer;                 // 32 * AHCI_COMMAND_TABLE (0x5000) + AHCI_COMMAND_LIST (0x0400) + AHCI_RECEIVED_FIS (0x0100)
+  PAHCI_PORT_REGISTERS      AhciPortControl;            // Указатель на регистры управления текущим каналом (Port control registers [x])
+  //PAHCI_COMMAND_TABLE     AhciCommandTable[32];       // Указатели на командные таблицы (&AhciCommandTable[0] == AhciBuffer)
+  PAHCI_COMMAND_LIST        CmdListBaseAddress;         // Указатель на список командных слотов (AHCI Command Slots)
+  PHYSICAL_ADDRESS          PhCmdListBaseAddress;
+  PAHCI_RECEIVED_FIS        FISBaseAddress;
+  PHYSICAL_ADDRESS          PhFISBaseAddress;
+  PFIS_REGISTER_H2D         CommandFIS;                 // first slot (0)
 
   PAHCI_START_IO            AhciStartIo;
   PAHCI_INTERRUPT           AhciInterrupt;

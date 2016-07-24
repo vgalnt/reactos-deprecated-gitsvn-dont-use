@@ -5,6 +5,218 @@
 #include <debug.h>
 
 
+NTSTATUS
+AhciXChannelInit(
+    IN PPDO_CHANNEL_EXTENSION ChannelPdoExtension,
+    IN ULONG ChannelNumber)
+{
+  PFDO_CONTROLLER_EXTENSION  ControllerFdoExtension;
+  PAHCI_MEMORY_REGISTERS     Abar;
+  AHCI_HOST_GLOBAL_CONTROL   GlobalControl;
+  ULONG                      InterruptStatus;
+  PAHCI_PORT_REGISTERS       Port;
+  ULONG                      DmaBuffer;
+  ULONG                      AhciBuffer;
+  ULONG                      AhciBufferLength;
+  PHYSICAL_ADDRESS           HighestAddress = {{0xFFFFFFFF, 0}};
+  PAHCI_COMMAND_HEADER       AhciCommandHeader;
+  PAHCI_COMMAND_LIST         CmdListBaseAddress;
+  PHYSICAL_ADDRESS           PhCmdListBaseAddress;
+  PAHCI_RECEIVED_FIS         FISBaseAddress;
+  PHYSICAL_ADDRESS           PhFISBaseAddress;
+  PAHCI_COMMAND_TABLE        AhciCommandTable;
+  PHYSICAL_ADDRESS           PhAhciCommandTable;
+  NTSTATUS                   Status=0;
+  ULONG                      ix;
+
+  DPRINT("AhciXChannelInit: ChannelPdoExtension - %p, ChannelNumber - %x\n", ChannelPdoExtension, ChannelNumber);
+
+  ControllerFdoExtension = (PFDO_CONTROLLER_EXTENSION)ChannelPdoExtension->ControllerFdo->DeviceExtension;
+  Abar = ControllerFdoExtension->AhciRegisters;
+  GlobalControl.AsULONG = READ_REGISTER_ULONG((PULONG)&Abar->GlobalHostControl);
+  InterruptStatus = READ_REGISTER_ULONG((PULONG)&Abar->InterruptStatus);
+
+  Port = (PAHCI_PORT_REGISTERS)&Abar->PortControl[ChannelNumber];
+  ChannelPdoExtension->AhciInterface.AhciPortControl = Port;
+
+  DPRINT("AhciXChannelInit: Abar                          - %p\n", Abar);
+  DPRINT("AhciXChannelInit: GlobalControl                 - %p\n", GlobalControl);
+  DPRINT("AhciXChannelInit: GlobalControl.InterruptEnable - %d\n", GlobalControl.InterruptEnable);
+  DPRINT("AhciXChannelInit: InterruptStatus               - %p\n", InterruptStatus);
+  DPRINT("AhciXChannelInit: Port                          - %p\n", Port);
+
+  // FIXME 
+  AhciBufferLength = 32 * sizeof(AHCI_COMMAND_TABLE) +  // 0x5000   // aligned to a 128-byte cache line (0x0080)
+                          sizeof(AHCI_COMMAND_LIST)  +  // 0x0400   // 1024 byte - aligned (0x0400)
+                          sizeof(AHCI_RECEIVED_FIS)  +  // 0x0100   // 256 byte - aligned  (0x0100)
+                          sizeof(IDENTIFY_DATA);        // 0x0200
+
+  DPRINT("AhciXChannelInit: sizeof(AHCI_PORT_REGISTERS) - 0x%x\n", sizeof(AHCI_PORT_REGISTERS));
+  DPRINT("AhciXChannelInit: sizeof(AHCI_RECEIVED_FIS)   - 0x%x\n", sizeof(AHCI_RECEIVED_FIS));
+  DPRINT("AhciXChannelInit: sizeof(AHCI_COMMAND_LIST)   - 0x%x\n", sizeof(AHCI_COMMAND_LIST));
+  DPRINT("AhciXChannelInit: sizeof(AHCI_COMMAND_HEADER) - 0x%x\n", sizeof(AHCI_COMMAND_HEADER));
+  DPRINT("AhciXChannelInit: sizeof(AHCI_COMMAND_TABLE)  - 0x%x\n", sizeof(AHCI_COMMAND_TABLE));
+
+  /*ChannelPdoExtension->AhciInterface.AhciBuffer =
+              MmAllocateContiguousMemorySpecifyCache(
+                        AhciBufferLength
+                        IN PHYSICAL_ADDRESS  LowestAcceptableAddress,
+                        IN PHYSICAL_ADDRESS  HighestAcceptableAddress,
+                        IN PHYSICAL_ADDRESS  BoundaryAddressMultiple  OPTIONAL,
+                        MmNonCached); */
+
+  AhciBuffer = (ULONG_PTR)MmAllocateContiguousMemory(AhciBufferLength, HighestAddress);
+
+  if ( !AhciBuffer )
+  {
+    DPRINT1("AhciXChannelInit: Not Created AhciBuffer!\n");
+    Status = STATUS_INSUFFICIENT_RESOURCES;
+    return Status;
+  }
+
+  RtlZeroMemory((PVOID)AhciBuffer, AhciBufferLength);
+  ChannelPdoExtension->AhciInterface.AhciBuffer = AhciBuffer;
+  DPRINT("AhciXChannelInit: AhciBuffer       - %p\n", AhciBuffer);
+  DPRINT("AhciXChannelInit: AhciBufferLength - %x\n", AhciBufferLength);
+
+  DmaBuffer = (ULONG_PTR)MmAllocateContiguousMemory(0x20000, HighestAddress);   // 128 Kb - Maximum byte transfer buffer
+
+  if ( !DmaBuffer )
+  {
+    DPRINT1("AhciXChannelInit: Not Created DmaBuffer!\n");
+    Status = STATUS_INSUFFICIENT_RESOURCES;
+    return Status;
+  }
+
+  RtlZeroMemory((PVOID)DmaBuffer, 0x20000);
+  ChannelPdoExtension->AhciInterface.DmaBuffer = DmaBuffer;
+  DPRINT("AhciXChannelInit: DmaBuffer - %p\n", DmaBuffer);
+
+ASSERT(FALSE);
+  //AhciXPortStop(Port);
+
+  // 0x00 PxCLB  Command List Base Address, 1024 byte - aligned
+  CmdListBaseAddress = (PAHCI_COMMAND_LIST)(AhciBuffer + 32 * sizeof(AHCI_COMMAND_TABLE));
+  ChannelPdoExtension->AhciInterface.CmdListBaseAddress = CmdListBaseAddress;
+
+  PhCmdListBaseAddress = MmGetPhysicalAddress(CmdListBaseAddress);
+  ChannelPdoExtension->AhciInterface.PhCmdListBaseAddress = PhCmdListBaseAddress;
+
+  WRITE_REGISTER_ULONG((PULONG)&Port->CmdListBaseAddress,
+                       PhCmdListBaseAddress.LowPart);
+
+  WRITE_REGISTER_ULONG((PULONG)&Port->CmdListBaseAddressUpper,
+                       PhCmdListBaseAddress.HighPart);
+
+  // 0x08, PxFB  256 byte - aligned
+  FISBaseAddress = (PAHCI_RECEIVED_FIS)(AhciBuffer +
+                   32 * sizeof(AHCI_COMMAND_TABLE) +
+                   sizeof(AHCI_COMMAND_LIST));
+
+  ChannelPdoExtension->AhciInterface.FISBaseAddress = FISBaseAddress;
+
+  PhFISBaseAddress = MmGetPhysicalAddress(FISBaseAddress);
+  ChannelPdoExtension->AhciInterface.PhFISBaseAddress = PhFISBaseAddress;
+
+  WRITE_REGISTER_ULONG((PULONG)&Port->FISBaseAddress,
+                       PhFISBaseAddress.LowPart);
+
+  WRITE_REGISTER_ULONG((PULONG)&Port->FISBaseAddressUpper,
+                       PhFISBaseAddress.HighPart);
+
+  DPRINT("AhciXChannelInit: AhciBuffer                    - %p\n", AhciBuffer);
+  DPRINT("AhciXChannelInit: CmdListBaseAddress            - %p\n", CmdListBaseAddress);
+  DPRINT("AhciXChannelInit: FISBaseAddress                - %p\n", FISBaseAddress);
+
+  DPRINT("AhciXChannelInit: Port->CmdListBaseAddress      - %p\n", READ_REGISTER_ULONG((PULONG)&Port->CmdListBaseAddress));
+  DPRINT("AhciXChannelInit: Port->CmdListBaseAddressUpper - %p\n", READ_REGISTER_ULONG((PULONG)&Port->CmdListBaseAddressUpper));
+  DPRINT("AhciXChannelInit: Port->FISBaseAddress          - %p\n", READ_REGISTER_ULONG((PULONG)&Port->FISBaseAddress));
+  DPRINT("AhciXChannelInit: Port->FISBaseAddressUpper     - %p\n", READ_REGISTER_ULONG((PULONG)&Port->FISBaseAddressUpper));
+
+  for ( ix = 0; ix < 32; ix++ )
+  {
+    AhciCommandHeader = (PAHCI_COMMAND_HEADER)(
+                        (ULONG_PTR)CmdListBaseAddress +
+                        ix * sizeof(AHCI_COMMAND_HEADER));
+
+    AhciCommandTable = (PAHCI_COMMAND_TABLE)(
+                        AhciBuffer + 
+                        ix * sizeof(AHCI_COMMAND_TABLE));
+
+    PhAhciCommandTable = MmGetPhysicalAddress(AhciCommandTable);
+
+    AhciCommandHeader->CmdTableDescriptorBase = (PAHCI_COMMAND_TABLE)
+                                                PhAhciCommandTable.LowPart;
+
+    AhciCommandHeader->CmdTableDescriptorBaseU = PhAhciCommandTable.HighPart;
+
+    if ( ix == 0 )  // 0 slot - Command slot
+    {
+      // Setup Command Fis
+      ChannelPdoExtension->AhciInterface.CommandFIS = (PFIS_REGISTER_H2D)
+                                                      (&AhciCommandTable->CommandFIS);
+
+      DPRINT("AhciXChannelInit: ChannelPdoExtension->AhciInterface.CommandFIS - %p\n", ChannelPdoExtension->AhciInterface.CommandFIS);
+    }
+
+    DPRINT("AhciXChannelInit: AhciCommandHeader[%d]                      - %p\n", ix, AhciCommandHeader);
+    DPRINT("AhciXChannelInit: AhciCommandTable[%d]                       - %p\n", ix, AhciCommandTable);
+    DPRINT("AhciXChannelInit: AhciCommandHeader->CmdTableDescriptorBase  - %p\n", AhciCommandHeader->CmdTableDescriptorBase);
+    DPRINT("AhciXChannelInit: AhciCommandHeader->CmdTableDescriptorBaseU - %p\n", AhciCommandHeader->CmdTableDescriptorBaseU);
+  }
+
+ASSERT(FALSE);
+  //AhciXPortStart(Port);
+
+  GlobalControl.InterruptEnable = 1;
+  WRITE_REGISTER_ULONG((PULONG)&Abar->GlobalHostControl, GlobalControl.AsULONG);
+  GlobalControl.AsULONG = READ_REGISTER_ULONG((PULONG)&Abar->GlobalHostControl);
+
+  DPRINT("AhciXChannelInit: GlobalControl                 - %p\n", GlobalControl);
+  DPRINT("AhciXChannelInit: GlobalControl.InterruptEnable - %d\n", GlobalControl.InterruptEnable);
+
+  InterruptStatus |= 1 << ChannelNumber;
+  WRITE_REGISTER_ULONG((PULONG)&Abar->InterruptStatus, InterruptStatus);
+
+  DPRINT("AhciXChannelInit: InterruptStatus   - %p\n", READ_REGISTER_ULONG((PULONG)&Abar->InterruptStatus));
+  DPRINT("\n");
+
+  /*
+  DPRINT("AhciXChannelInit: ChannelPdoExtension->AhciRegisters        - %p\n", ChannelPdoExtension->AhciRegisters);
+  DPRINT("AhciXChannelInit: ChannelPdoExtension->AhciChannel          - %d\n", ChannelPdoExtension->AhciChannel);
+  DPRINT("AhciXChannelInit: ChannelPdoExtension->AhciPortControl      - %p\n", ChannelPdoExtension->AhciPortControl);
+  DPRINT("AhciXChannelInit: ChannelPdoExtension->AhciBuffer           - %p\n", ChannelPdoExtension->AhciBuffer);
+  //DPRINT("AhciXChannelInit: ChannelPdoExtension->AhciCommandTable[0]  - %p\n", ChannelPdoExtension->AhciCommandTable[0]);
+  DPRINT("AhciXChannelInit: ChannelPdoExtension->CmdListBaseAddress   - %p\n", ChannelPdoExtension->CmdListBaseAddress);
+  DPRINT("AhciXChannelInit: ChannelPdoExtension->PhCmdListBaseAddress - %p\n", ChannelPdoExtension->PhCmdListBaseAddress);
+  DPRINT("AhciXChannelInit: ChannelPdoExtension->FISBaseAddress       - %p\n", ChannelPdoExtension->FISBaseAddress);
+  DPRINT("AhciXChannelInit: ChannelPdoExtension->PhFISBaseAddress     - %p\n", ChannelPdoExtension->PhFISBaseAddress);
+
+  DPRINT("\n");
+
+  //DPRINT("AhciXChannelInit: Port->CmdListBaseAddress      - %p\n", READ_REGISTER_ULONG((PULONG)&Port->CmdListBaseAddress));
+  //DPRINT("AhciXChannelInit: Port->CmdListBaseAddressUpper - %p\n", READ_REGISTER_ULONG((PULONG)&Port->CmdListBaseAddressUpper));
+  //DPRINT("AhciXChannelInit: Port->FISBaseAddress          - %p\n", READ_REGISTER_ULONG((PULONG)&Port->FISBaseAddress));
+  //DPRINT("AhciXChannelInit: Port->FISBaseAddressUpper     - %p\n", READ_REGISTER_ULONG((PULONG)&Port->FISBaseAddressUpper));
+  DPRINT("AhciXChannelInit: Port->InterruptStatus         - %p\n", READ_REGISTER_ULONG((PULONG)&Port->InterruptStatus));
+  DPRINT("AhciXChannelInit: Port->InterruptEnable         - %p\n", READ_REGISTER_ULONG((PULONG)&Port->InterruptEnable));
+  DPRINT("AhciXChannelInit: Port->Command                 - %p\n", READ_REGISTER_ULONG((PULONG)&Port->Command));
+  DPRINT("AhciXChannelInit: Port->Reserved1               - %p\n", READ_REGISTER_ULONG((PULONG)&Port->Reserved1));
+  DPRINT("AhciXChannelInit: Port->TaskFileData            - %p\n", READ_REGISTER_ULONG((PULONG)&Port->TaskFileData));
+  //DPRINT("AhciXChannelInit: Port->Signature               - %p\n", READ_REGISTER_ULONG((PULONG)&Port->Signature));
+  DPRINT("AhciXChannelInit: Port->SataStatus              - %p\n", READ_REGISTER_ULONG((PULONG)&Port->SataStatus));
+  DPRINT("AhciXChannelInit: Port->SataControl             - %p\n", READ_REGISTER_ULONG((PULONG)&Port->SataControl));
+  DPRINT("AhciXChannelInit: Port->SataError               - %p\n", READ_REGISTER_ULONG((PULONG)&Port->SataError));
+  DPRINT("AhciXChannelInit: Port->SataActive              - %p\n", READ_REGISTER_ULONG((PULONG)&Port->SataActive));
+  DPRINT("AhciXChannelInit: Port->CommandIssue            - %p\n", READ_REGISTER_ULONG((PULONG)&Port->CommandIssue));
+  DPRINT("AhciXChannelInit: Port->SataNotification        - %p\n", READ_REGISTER_ULONG((PULONG)&Port->SataNotification));
+  DPRINT("AhciXChannelInit: Port->FISSwitchingControl     - %p\n", READ_REGISTER_ULONG((PULONG)&Port->FISSwitchingControl));
+  */
+
+  DPRINT("AhciXChannelInit return - %x \n", Status);
+  return Status;
+}
+
 AHCI_DEVICE_TYPE
 AhciSignatureCheck(IN PAHCI_PORT_REGISTERS PortControl)
 {
@@ -146,8 +358,7 @@ AhciXFdoQueryBusRelations(
         AhciInterface->Abar                = Abar;
         AhciInterface->InterruptResource   = &ControllerFdoExtension->InterruptResource;
 
-ASSERT(FALSE);
-        Status = 0;//AhciXChannelInit(ChannelPdoExtension, ix);
+        Status = AhciXChannelInit(ChannelPdoExtension, ix);
 
         if ( !NT_SUCCESS(Status) )
         {
