@@ -170,6 +170,101 @@ ReleaseBusInterface(
   return Status;
 }
 
+NTSTATUS
+AhciXFindMassStorageController(
+    IN PFDO_CONTROLLER_EXTENSION ControllerFdoExtension,
+    IN PPCI_COMMON_CONFIG PciConfig)
+{
+  ULONG  BaseAddress;
+
+  DPRINT("AhciXFindMassStorageController(%p %p)\n", ControllerFdoExtension, PciConfig);
+
+  DPRINT("PciConfig->VendorID                 - %x\n", PciConfig->VendorID);
+  DPRINT("PciConfig->DeviceID                 - %x\n", PciConfig->DeviceID);
+  DPRINT("PciConfig->Command                  - %x\n", PciConfig->Command);
+  DPRINT("PciConfig->Status                   - %x\n", PciConfig->Status);
+  DPRINT("PciConfig->RevisionID               - %x\n", PciConfig->RevisionID);
+  DPRINT("PciConfig->ProgIf                   - %x\n", PciConfig->ProgIf);
+  DPRINT("PciConfig->SubClass                 - %x\n", PciConfig->SubClass);
+  DPRINT("PciConfig->BaseClass                - %x\n", PciConfig->BaseClass);
+  DPRINT("PciConfig->CacheLineSize            - %x\n", PciConfig->CacheLineSize);
+  DPRINT("PciConfig->LatencyTimer             - %x\n", PciConfig->LatencyTimer);
+  DPRINT("PciConfig->HeaderType               - %x\n", PciConfig->HeaderType);
+  DPRINT("PciConfig->BIST                     - %x\n", PciConfig->BIST);
+  DPRINT("PciConfig->u.type0.BaseAddresses[0] - %x\n", PciConfig->u.type0.BaseAddresses[0]);
+  DPRINT("PciConfig->u.type0.BaseAddresses[1] - %x\n", PciConfig->u.type0.BaseAddresses[1]);
+  DPRINT("PciConfig->u.type0.BaseAddresses[2] - %x\n", PciConfig->u.type0.BaseAddresses[2]);
+  DPRINT("PciConfig->u.type0.BaseAddresses[3] - %x\n", PciConfig->u.type0.BaseAddresses[3]);
+  DPRINT("PciConfig->u.type0.BaseAddresses[4] - %x\n", PciConfig->u.type0.BaseAddresses[4]);
+  DPRINT("PciConfig->u.type0.BaseAddresses[5] - %x\n", PciConfig->u.type0.BaseAddresses[5]);
+  DPRINT("PciConfig->u.type0.CIS              - %x\n", PciConfig->u.type0.CIS);
+  DPRINT("PciConfig->u.type0.SubVendorID      - %x\n", PciConfig->u.type0.SubVendorID);
+  DPRINT("PciConfig->u.type0.SubSystemID      - %x\n", PciConfig->u.type0.SubSystemID);
+  DPRINT("PciConfig->u.type0.ROMBaseAddress   - %x\n", PciConfig->u.type0.ROMBaseAddress);
+  DPRINT("PciConfig->u.type0.CapabilitiesPtr  - %x\n", PciConfig->u.type0.CapabilitiesPtr);
+  DPRINT("PciConfig->u.type0.Reserved1[0]     - %x\n", PciConfig->u.type0.Reserved1[0]);
+  DPRINT("PciConfig->u.type0.Reserved1[1]     - %x\n", PciConfig->u.type0.Reserved1[1]);
+  DPRINT("PciConfig->u.type0.Reserved1[2]     - %x\n", PciConfig->u.type0.Reserved1[2]);
+  DPRINT("PciConfig->u.type0.Reserved2        - %x\n", PciConfig->u.type0.Reserved2);
+  DPRINT("PciConfig->u.type0.InterruptLine    - %x\n", PciConfig->u.type0.InterruptLine);
+  DPRINT("PciConfig->u.type0.InterruptPin     - %x\n", PciConfig->u.type0.InterruptPin);
+  DPRINT("PciConfig->u.type0.MinimumGrant     - %x\n", PciConfig->u.type0.MinimumGrant);
+  DPRINT("PciConfig->u.type0.MaximumLatency   - %x\n", PciConfig->u.type0.MaximumLatency);
+
+  ControllerFdoExtension->VendorId = PciConfig->VendorID;
+  ControllerFdoExtension->DeviceId = PciConfig->DeviceID;
+
+  ControllerFdoExtension->ControllerMode = CONTROLLER_COMPATABLE_MODE;    // Compatable mode 
+
+  if ( PciConfig->BaseClass != PCI_CLASS_MASS_STORAGE_CTLR )
+    return STATUS_UNSUCCESSFUL;
+
+  switch ( PciConfig->SubClass )
+  {
+    case 0x00:
+      DPRINT("PciConfig->SubClass == 0x00 FIXME\n");                      //SCSI
+      break;
+
+    case 0x01:
+      DPRINT("PciConfig->SubClass == 0x01\n");                            //IDE
+      if ( PciConfig->ProgIf & 0x05 )
+        ControllerFdoExtension->ControllerMode = CONTROLLER_NATIVE_MODE;  // Native mode 
+      break;
+
+    case 0x04:
+      DPRINT("PciConfig->SubClass == 0x04 FIXME\n");                      //RAID
+      break;
+
+    case 0x06:
+      DPRINT("PciConfig->SubClass == 0x06\n");                            //SATA (AHCI only?)
+
+      BaseAddress = PciConfig->u.type0.BaseAddresses[5];
+      DPRINT("BaseAddress - %p\n", BaseAddress);
+
+      if ( BaseAddress )
+      {
+        DPRINT("Found AHCI controller!\n");
+        ControllerFdoExtension->ControllerMode = CONTROLLER_AHCI_MODE;    // AHCI mode 
+      }
+      else
+      {
+        DPRINT("BaseAddress == 0\n");
+        ControllerFdoExtension->AhciRegisters = NULL;
+      }
+      break;
+
+    case 0x80:
+      DPRINT("PciConfig->SubClass == 0x80 FIXME\n");
+      break;
+
+    default:
+      DPRINT("PciConfig->SubClass == unknown FIXME\n");
+      break;
+  }
+
+  return STATUS_SUCCESS;
+}
+
 NTSTATUS NTAPI
 AhciXAddDevice(
     IN PDRIVER_OBJECT DriverObject,
@@ -213,7 +308,6 @@ AhciXAddDevice(
     return Status;
   }
 
-ASSERT(FALSE);
   Status = GetBusInterface(ControllerFdoExtension);
 
   if ( !NT_SUCCESS(Status) )
@@ -238,8 +332,9 @@ ASSERT(FALSE);
     return STATUS_IO_DEVICE_ERROR;
   }
 
-ASSERT(FALSE);
-  Status = 0;//AhciXFindMassStorageController(ControllerFdoExtension, &ControllerFdoExtension->PciConfig);
+  Status = AhciXFindMassStorageController(
+                ControllerFdoExtension,
+                &ControllerFdoExtension->PciConfig);
 
   ControllerFdo->Flags &= ~DO_DEVICE_INITIALIZING;
 

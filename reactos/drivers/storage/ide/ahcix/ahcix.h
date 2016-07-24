@@ -25,6 +25,10 @@ typedef struct _FDO_CONTROLLER_EXTENSION {
   PDEVICE_OBJECT           LowerDevice;
   PBUS_INTERFACE_STANDARD  BusInterface;
   PCI_COMMON_CONFIG        PciConfig;
+  USHORT                   VendorId;
+  USHORT                   DeviceId;
+  ULONG                    ControllerMode;  // 2 - AHCI, 1 - Native, 0 - Compatible
+  PAHCI_MEMORY_REGISTERS   AhciRegisters;
 
 
 } FDO_CONTROLLER_EXTENSION, *PFDO_CONTROLLER_EXTENSION;
