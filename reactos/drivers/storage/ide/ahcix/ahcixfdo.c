@@ -43,6 +43,34 @@ AhciXPortStop(IN PAHCI_PORT_REGISTERS Port)
   //DPRINT("AhciXPortStop: Command - %p\n", Command);
 }
 
+VOID
+AhciXPortStart(IN PAHCI_PORT_REGISTERS Port)
+{
+  AHCI_PORT_COMMAND  Command;
+
+  // Start command engine
+  // FIXME: Software must wait for CLO (CmdListOverride) to be cleared to ‘0’
+  // before setting PxCMD.ST (Start) to ‘1’.
+
+  Command.AsULONG = READ_REGISTER_ULONG((PULONG)&Port->Command);
+  //DPRINT("AhciXPortStart: Command - %p\n", Command);
+
+  while( 1 )
+  {
+    Command.AsULONG = READ_REGISTER_ULONG((PULONG)&Port->Command);
+    if ( Command.CmdListRunning )
+      continue;
+    else
+      break;
+  }
+
+  Command.FISReceiveEnable = 1;
+  Command.Start            = 1;
+
+  WRITE_REGISTER_ULONG((PULONG)&Port->Command, Command.AsULONG);
+  //DPRINT("AhciXPortStart: Command - %p\n", READ_REGISTER_ULONG((PULONG)&Port->Command));
+}
+
 NTSTATUS
 AhciXChannelInit(
     IN PPDO_CHANNEL_EXTENSION ChannelPdoExtension,
@@ -202,8 +230,7 @@ AhciXChannelInit(
     DPRINT("AhciXChannelInit: AhciCommandHeader->CmdTableDescriptorBaseU - %p\n", AhciCommandHeader->CmdTableDescriptorBaseU);
   }
 
-ASSERT(FALSE);
-  //AhciXPortStart(Port);
+  AhciXPortStart(Port);
 
   GlobalControl.InterruptEnable = 1;
   WRITE_REGISTER_ULONG((PULONG)&Abar->GlobalHostControl, GlobalControl.AsULONG);
