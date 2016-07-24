@@ -5,6 +5,44 @@
 #include <debug.h>
 
 
+DRIVER_DISPATCH AhciXForwardOrIgnore;
+NTSTATUS NTAPI
+AhciXForwardOrIgnore(
+    IN PDEVICE_OBJECT DeviceObject,
+    IN PIRP Irp)
+{
+  if ( ((PCOMMON_DEVICE_EXTENSION)DeviceObject->DeviceExtension)->IsFDO )
+  {
+    return ForwardIrpAndForget(DeviceObject, Irp);
+  }
+  else
+  {
+    ULONG MajorFunction;
+    NTSTATUS Status;
+
+    MajorFunction = IoGetCurrentIrpStackLocation(Irp)->MajorFunction;
+
+    if ( MajorFunction == IRP_MJ_CREATE  ||
+         MajorFunction == IRP_MJ_CLEANUP ||
+         MajorFunction == IRP_MJ_CLOSE )
+    {
+      Status = STATUS_SUCCESS;
+    }
+    else
+    {
+      DPRINT1("PDO stub for major function 0x%lx\n", MajorFunction);
+      Status = STATUS_NOT_SUPPORTED;
+    }
+
+    Irp->IoStatus.Information = 0;
+    Irp->IoStatus.Status = Status;
+
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+
+    return Status;
+  }
+}
+
 DRIVER_UNLOAD AhciXUnload;
 VOID NTAPI 
 AhciXUnload(IN PDRIVER_OBJECT DriverObject)
