@@ -254,6 +254,30 @@ AhciXPdoQueryResourceRequirements(
 }
 
 NTSTATUS
+AhciXStartChannel(
+    IN PDEVICE_OBJECT ChannelPdo,
+    IN PIRP Irp)
+{
+  PPDO_CHANNEL_EXTENSION     ChannelPdoExtension;
+  PFDO_CONTROLLER_EXTENSION  ControllerFdoExtension;
+  
+  DPRINT("AhciXStartChannel: ChannelPdo - %p, Irp - %p\n", ChannelPdo, Irp);
+  
+  ChannelPdoExtension = (PPDO_CHANNEL_EXTENSION)ChannelPdo->DeviceExtension;
+  ControllerFdoExtension = (PFDO_CONTROLLER_EXTENSION)
+                           ChannelPdoExtension->ControllerFdo->DeviceExtension;
+  
+  if ( ControllerFdoExtension->AhciRegisters )
+  {
+    DPRINT("AhciXStartChannel: AhciRegisters > 0. return - STATUS_SUCCESS\n");
+    return STATUS_SUCCESS;
+  }
+  
+  DPRINT("AhciXStartChannel: return - %x\n", STATUS_SUCCESS);
+  return STATUS_SUCCESS;
+}
+
+NTSTATUS
 AhciXPdoPnpDispatch(
     IN PDEVICE_OBJECT ChannelPdo,
     IN PIRP Irp)
@@ -303,7 +327,7 @@ AhciXPdoPnpDispatch(
      */
     case IRP_MN_START_DEVICE:                  /* 0x00 */
       DPRINT("IRP_MJ_PNP / IRP_MN_START_DEVICE\n");
-ASSERT(FALSE);
+      Status = AhciXStartChannel(ChannelPdo, Irp);
       break;
 
     case IRP_MN_QUERY_REMOVE_DEVICE:           /* 0x01 */
