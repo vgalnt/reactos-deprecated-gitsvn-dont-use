@@ -41,6 +41,10 @@ AhciXFdoPnpDispatch(
     IN PIRP Irp);
 
 /* ahcixpdo.c */
+NTSTATUS
+AhciXPdoPnpDispatch(
+    IN PDEVICE_OBJECT ChannelPdo,
+    IN PIRP Irp);
 
 
 #endif /* _AHCIX_PCH_ */
