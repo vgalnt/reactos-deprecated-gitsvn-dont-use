@@ -1,6 +1,6 @@
 #include "atax.h"               
 
-#define NDEBUG
+//#define NDEBUG
 #include <debug.h>
 
 
@@ -145,7 +145,7 @@ AtaXGetNextRequest(
     KeReleaseSpinLockFromDpcLevel(&AtaXChannelFdoExtension->SpinLock);
   }
 }
-
+ 
 NTSTATUS
 AtaXSendInquiry(
     PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
@@ -1018,6 +1018,132 @@ Responded:
 
   DPRINT("AtaXDetectDevices return   - %x \n", DeviceResponded);
   return DeviceResponded;
+}
+
+BOOLEAN
+AtaXIssueIdentifyAhci(
+    IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension,
+    IN PIDENTIFY_DATA Identify,
+    IN UCHAR IdentifyCommand)
+{
+  PAHCI_PORT_REGISTERS  Port;
+  PAHCI_COMMAND_HEADER  CommandHeader;
+  PAHCI_COMMAND_TABLE   CommandTable;
+  PHYSICAL_ADDRESS      PhCommandTable;
+  PFIS_REGISTER_H2D     CommandFIS;
+  ULONG                 InterruptEnable;
+  //ULONG                 InterruptStatus;
+  ULONG                 Slot = 0;
+
+  Port = AtaXChannelFdoExtension->AhciInterface->AhciPortControl;
+  DPRINT("AtaXIssueIdentifyAhci: Port - %p, IdentifyCommand - %x\n", Port, IdentifyCommand);
+
+  //InterruptStatus = READ_REGISTER_ULONG((PULONG)&Port->InterruptStatus);
+  //DPRINT("AtaXIssueIdentifyAhci: InterruptStatus - %p\n", InterruptStatus);
+  WRITE_REGISTER_ULONG((PULONG)&Port->InterruptStatus, 0xFFFFFFFF);  // Clear pending interrupt bits
+
+  InterruptEnable = READ_REGISTER_ULONG((PULONG)&Port->InterruptEnable);
+  //DPRINT("AtaXIssueIdentifyAhci: Port->InterruptEnable - %p\n", InterruptEnable);
+
+  InterruptEnable |= 1;
+  WRITE_REGISTER_ULONG((PULONG)&Port->InterruptEnable, InterruptEnable);
+  //DPRINT("AtaXIssueIdentifyAhci: Port->InterruptEnable - %p\n", READ_REGISTER_ULONG((PULONG)&Port->InterruptEnable));
+
+  CommandHeader = (PAHCI_COMMAND_HEADER)
+                  ((ULONG_PTR)AtaXChannelFdoExtension->AhciInterface->CmdListBaseAddress + 
+                  Slot * sizeof(AHCI_COMMAND_HEADER));
+  //DPRINT("AtaXIssueIdentifyAhci: CommandHeader - %p\n", CommandHeader);
+
+  CommandTable = (PAHCI_COMMAND_TABLE)AtaXChannelFdoExtension->AhciInterface->AhciBuffer +
+                  Slot * sizeof(AHCI_COMMAND_TABLE);
+
+  PhCommandTable = MmGetPhysicalAddress((PVOID)CommandTable);
+
+  CommandHeader->DescriptionInformation.CommandFISLength = sizeof(FIS_REGISTER_H2D)/sizeof(ULONG); // Command FIS size
+  CommandHeader->DescriptionInformation.Write            = 0;  // Read from device
+  CommandHeader->DescriptionInformation.PRDTLength       = 1;  // 1 PRD (Physical Region Descriptor)
+
+  CommandHeader->PRDTByteCount           = sizeof(IDENTIFY_DATA);
+  CommandHeader->CmdTableDescriptorBase  = (PAHCI_COMMAND_TABLE)PhCommandTable.LowPart;
+  CommandHeader->CmdTableDescriptorBaseU = PhCommandTable.HighPart;
+
+  CommandTable->PRDTable.Descriptor[0].DataBaseAddress = AtaXChannelFdoExtension->AhciInterface->PhCmdListBaseAddress.LowPart +
+                                                         sizeof(AHCI_COMMAND_LIST) +
+                                                         sizeof(AHCI_RECEIVED_FIS);
+
+  CommandTable->PRDTable.Descriptor[0].DataByteCount = sizeof(IDENTIFY_DATA);
+  CommandTable->PRDTable.Descriptor[0].InterruptOnCompletion = 1;
+
+  DPRINT("AtaXIssueIdentifyAhci: AtaXChannelFdoExtension->AhciInterface->CommandFIS - %p\n", AtaXChannelFdoExtension->AhciInterface->CommandFIS);
+
+  // Setup Command FIS (0 Slot)
+  CommandFIS = AtaXChannelFdoExtension->AhciInterface->CommandFIS;//(PFIS_REGISTER_H2D)(&CommandTable->CommandFIS);
+
+  CommandFIS->FISType      = FIS_TYPE_REGISTER_H2D;
+  CommandFIS->Command      = IdentifyCommand;	              // 0xEC or 0xA1
+  CommandFIS->Device       = 0;		                      // Master device
+  CommandFIS->RegisterType = 1;		                      // Write command register
+  CommandFIS->LBA1         = (sizeof(IDENTIFY_DATA) & 0xFF);  // LBA mid register
+  CommandFIS->LBA2         = (sizeof(IDENTIFY_DATA) >> 8);    // LBA high register
+
+  //Command = (AHCI_PORT_COMMAND)READ_REGISTER_ULONG((PULONG)&Port->Command);
+  //DPRINT(" ... : Command - %p\n", Command);
+
+  /*//DPRINT(" ... : Command.Start - %x\n", Command.Start);
+  //DPRINT(" ... : Command.SpinUpDevice                       - %x\n", Command.SpinUpDevice);
+  //DPRINT(" ... : Command.PowerOnDevice                      - %x\n", Command.PowerOnDevice);
+  //DPRINT(" ... : Command.CmdListOverride                    - %x\n", Command.CmdListOverride);
+  //DPRINT(" ... : Command.FISReceiveEnable                   - %x\n", Command.FISReceiveEnable);
+  //DPRINT(" ... : Command.CurrentCmdSlot                     - %x\n", Command.CurrentCmdSlot);
+  //DPRINT(" ... : Command.MechanicalPresenceSwitchState      - %x\n", Command.MechanicalPresenceSwitchState);
+  //DPRINT(" ... : Command.FISReceiveRunning                  - %x\n", Command.FISReceiveRunning);
+  //DPRINT(" ... : Command.CmdListRunning                     - %x\n", Command.CmdListRunning);
+  //DPRINT(" ... : Command.ColdPresenceState                  - %x\n", Command.ColdPresenceState);
+  //DPRINT(" ... : Command.PortMultiplierAttached             - %x\n", Command.PortMultiplierAttached);
+  //DPRINT(" ... : Command.HotPlugCapablePort                 - %x\n", Command.HotPlugCapablePort);
+  //DPRINT(" ... : Command.MechanicalPresenceSwitchAttached   - %x\n", Command.MechanicalPresenceSwitchAttached);
+  //DPRINT(" ... : Command.ColdPresenceDetection              - %x\n", Command.ColdPresenceDetection);
+  //DPRINT(" ... : Command.ExternalSATAPort                   - %x\n", Command.ExternalSATAPort);
+  //DPRINT(" ... : Command.FISSwitchingCapablePort            - %x\n", Command.FISSwitchingCapablePort);
+  //DPRINT(" ... : Command.AutomaticPartialSlumberTransitions - %x\n", Command.AutomaticPartialSlumberTransitions);
+  //DPRINT(" ... : Command.DeviceIsAtapi                      - %x\n", Command.DeviceIsAtapi);
+  //DPRINT(" ... : Command.AtapiDriveLedEnable                - %x\n", Command.AtapiDriveLedEnable);
+  //DPRINT(" ... : Command.AggressiveLinkPowerManagement      - %x\n", Command.AggressiveLinkPowerManagement);
+  //DPRINT(" ... : Command.AggressiveSlumberPartial           - %x\n", Command.AggressiveSlumberPartial);
+  //DPRINT(" ... : Command.InterfaceCommunicationControl      - %x\n", Command.InterfaceCommunicationControl);
+  //DPRINT(" ... : AtaXChannelFdoExtension->AhciInterface->Abar        - %p\n", AtaXChannelFdoExtension->AhciInterface->Abar);
+  //DPRINT(" ... : AtaXChannelFdoExtension->AhciChannel          - %d\n", AtaXChannelFdoExtension->AhciChannel);
+  //DPRINT(" ... : AtaXChannelFdoExtension->AhciInterface->AhciPortControl      - %p\n", AtaXChannelFdoExtension->AhciInterface->AhciPortControl);
+  //DPRINT(" ... : AtaXChannelFdoExtension->AhciBuffer           - %p\n", AtaXChannelFdoExtension->AhciBuffer);
+  ////DPRINT(" ... : AtaXChannelFdoExtension->AhciCommandTable[0]  - %p\n", AtaXChannelFdoExtension->AhciCommandTable[0]);
+  //DPRINT(" ... : AtaXChannelFdoExtension->CmdListBaseAddress   - %p\n", AtaXChannelFdoExtension->CmdListBaseAddress);
+  //DPRINT(" ... : AtaXChannelFdoExtension->PhCmdListBaseAddress - %p\n", AtaXChannelFdoExtension->PhCmdListBaseAddress);
+  //DPRINT(" ... : AtaXChannelFdoExtension->AhciInterface->FISBaseAddress       - %p\n", AtaXChannelFdoExtension->AhciInterface->FISBaseAddress);
+  //DPRINT(" ... : AtaXChannelFdoExtension->PhFISBaseAddress     - %p\n", AtaXChannelFdoExtension->PhFISBaseAddress);
+  //DPRINT("\n");
+  ////DPRINT(" ... : Port->CmdListBaseAddress      - %p\n", READ_REGISTER_ULONG((PULONG)&Port->CmdListBaseAddress));
+  ////DPRINT(" ... : Port->CmdListBaseAddressUpper - %p\n", READ_REGISTER_ULONG((PULONG)&Port->CmdListBaseAddressUpper));
+  ////DPRINT(" ... : Port->FISBaseAddress          - %p\n", READ_REGISTER_ULONG((PULONG)&Port->FISBaseAddress));
+  ////DPRINT(" ... : Port->FISBaseAddressUpper     - %p\n", READ_REGISTER_ULONG((PULONG)&Port->FISBaseAddressUpper));
+  //DPRINT(" ... : Port->InterruptStatus         - %p\n", READ_REGISTER_ULONG((PULONG)&Port->InterruptStatus));
+  //DPRINT(" ... : Port->InterruptEnable         - %p\n", READ_REGISTER_ULONG((PULONG)&Port->InterruptEnable));
+  //DPRINT(" ... : Port->Command                 - %p\n", READ_REGISTER_ULONG((PULONG)&Port->Command));
+  ////DPRINT(" ... : Port->Reserved1               - %p\n", READ_REGISTER_ULONG((PULONG)&Port->Reserved1));
+  //DPRINT(" ... : Port->TaskFileData            - %p\n", READ_REGISTER_ULONG((PULONG)&Port->TaskFileData));
+  ////DPRINT(" ... : Port->Signature               - %p\n", READ_REGISTER_ULONG((PULONG)&Port->Signature));
+  //DPRINT(" ... : Port->SataStatus              - %p\n", READ_REGISTER_ULONG((PULONG)&Port->SataStatus));
+  //DPRINT(" ... : Port->SataControl             - %p\n", READ_REGISTER_ULONG((PULONG)&Port->SataControl));
+  //DPRINT(" ... : Port->SataError               - %p\n", READ_REGISTER_ULONG((PULONG)&Port->SataError));
+  //DPRINT(" ... : Port->SataActive              - %p\n", READ_REGISTER_ULONG((PULONG)&Port->SataActive));
+  //DPRINT(" ... : Port->CommandIssue            - %p\n", READ_REGISTER_ULONG((PULONG)&Port->CommandIssue));
+  //DPRINT(" ... : Port->SataNotification        - %p\n", READ_REGISTER_ULONG((PULONG)&Port->SataNotification));
+  //DPRINT(" ... : Port->FISSwitchingControl     - %p\n", READ_REGISTER_ULONG((PULONG)&Port->FISSwitchingControl));
+  */
+
+  Port->CommandIssue = 1 << Slot;	// Issue command
+
+  DPRINT("AtaXIssueIdentifyAhci return - TRUE\n");
+  return TRUE;
 }
 
 BOOLEAN
