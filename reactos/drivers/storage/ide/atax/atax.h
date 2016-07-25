@@ -303,6 +303,7 @@ typedef struct _FDO_CHANNEL_EXTENSION {                   //// FDO расширение At
   ULONG                    WordsLeft;                         // Осталось передать слов (по 2 байта)
   UCHAR                    SmartCommand;                      // Значения подкоманды последней команды SMART
   UCHAR                    ReturningMediaStatus;              // Значение регистра Status после команды GET_MEDIA_STATUS
+  ULONG                    ErrorCount;                        // Счётчик ошибок
 
   PDEVICE_OBJECT           AtaXDevicePdo[MAX_IDE_DEVICE];     // Указатели на дочерние PDO
   IDENTIFY_DATA            FullIdentifyData[MAX_IDE_DEVICE];  // Identify данные для каждого устройства ("паспорт" устройства)
@@ -417,6 +418,9 @@ AddChannelFdo(
 // ataxinit.c
 BOOLEAN
 AtaXDetectDevices(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension);
+
+BOOLEAN
+AtaXDetectAhciDevice(IN PFDO_CHANNEL_EXTENSION AtaXChannelFdoExtension);
 
 BOOLEAN
 AtaXIssueIdentify(

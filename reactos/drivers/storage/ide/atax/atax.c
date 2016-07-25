@@ -1052,7 +1052,27 @@ AtaXSendCommand(
   ASSERT(AtaXChannelFdoExtension);
   ASSERT(AtaXChannelFdoExtension->CommonExtension.IsFDO);
 
-  if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )
+  if ( AtaXChannelFdoExtension->AhciInterface )
+  {
+    // отправляем команду AHCI-устройству
+    Status = AtaXChannelFdoExtension->AhciInterface->AhciStartIo(
+                 AtaXChannelFdoExtension->AhciInterface->ChannelPdoExtension,
+                 &AtaXChannelFdoExtension->FullIdentifyData[0],
+                 Srb);
+
+    if ( NT_SUCCESS(Status) )
+    {
+      if ( (Srb->SrbFlags & SRB_FLAGS_DATA_IN)  ||  (Srb->SrbFlags & SRB_FLAGS_DATA_OUT) )
+      {
+        AtaXChannelFdoExtension->DataBuffer         = (PUSHORT)Srb->DataBuffer;
+        AtaXChannelFdoExtension->WordsLeft          = Srb->DataTransferLength / 2;
+        AtaXChannelFdoExtension->ExpectingInterrupt = TRUE;                              // следующее прерывание - ожидаемое
+      }
+    }
+
+    //DPRINT("AtaXSendCommand: AhciSendCommand return - %x\n", Status);
+  }
+  else if ( AtaXChannelFdoExtension->DeviceFlags[Srb->TargetId] & DFLAGS_ATAPI_DEVICE )
   {
     Status = AtapiSendCommand(AtaXChannelFdoExtension, Srb);
   }
