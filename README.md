@@ -1,4 +1,4 @@
-# reactos
+# AhciX driver for ReactOS.
 ReactOS Mirror
 
 Простой PnP AHCI SATA драйвер.
