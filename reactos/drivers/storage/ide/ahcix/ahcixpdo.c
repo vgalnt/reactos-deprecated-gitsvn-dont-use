@@ -1,7 +1,7 @@
 
 #include "ahcix.h"
 
-//#define NDEBUG
+#define NDEBUG
 #include <debug.h>
 
 
@@ -275,6 +275,131 @@ AhciXStartChannel(
   
   DPRINT("AhciXStartChannel: return - %x\n", STATUS_SUCCESS);
   return STATUS_SUCCESS;
+}
+
+NTSTATUS NTAPI   //  PAHCI_INTERRUPT  AhciInterrupt;
+AhciInterruptRoutine(
+    IN PPDO_CHANNEL_EXTENSION ChannelPdoExtension,
+    IN PIDENTIFY_DATA IdentifyData,
+    IN PSCSI_REQUEST_BLOCK Srb)
+{
+  PAHCI_PORT_REGISTERS        Port;
+  ULONG                       AhciInterruptStatus;
+  AHCI_PORT_INTERRUPT_STATUS  PortInterruptStatus;
+  NTSTATUS                    Status;
+
+
+  DPRINT("AhciInterruptRoutine: ChannelPdoExtension - %p\n", ChannelPdoExtension);
+
+  Port = ChannelPdoExtension->AhciInterface.AhciPortControl;
+  DPRINT("AhciInterruptRoutine: Port - %p\n", Port);
+
+  AhciInterruptStatus = READ_REGISTER_ULONG( (PULONG)&ChannelPdoExtension->AhciInterface.Abar->InterruptStatus);
+  DPRINT("AhciInterruptRoutine: AhciInterruptStatus - %p\n", AhciInterruptStatus);
+
+  PortInterruptStatus.AsULONG = READ_REGISTER_ULONG((PULONG)&Port->InterruptStatus);
+  DPRINT("AhciInterruptRoutine: PortInterruptStatus - %p\n", READ_REGISTER_ULONG((PULONG)&Port->InterruptStatus));
+
+  if ( !PortInterruptStatus.AsULONG )
+   {
+    DPRINT("AhciInterruptRoutine: return FALSE\n");
+    return STATUS_UNSUCCESSFUL;
+  }
+
+  if ( PortInterruptStatus.FisRegisterD2HInterrupt )
+  {
+    PFIS_REGISTER_H2D  CommandFIS = ChannelPdoExtension->AhciInterface.CommandFIS;
+    ULONG              Buffer;
+
+    DPRINT1("AhciInterruptRoutine: FIS_REGISTER_D2H\n");
+
+    if ( (CommandFIS->Command == 0xEC) || (CommandFIS->Command == 0xA1)  ) // Identify ? or 
+    {
+      Buffer = (ULONG)ChannelPdoExtension->AhciInterface.FISBaseAddress +
+               sizeof(AHCI_RECEIVED_FIS);
+
+      RtlMoveMemory(IdentifyData, (PVOID)Buffer, sizeof(IDENTIFY_DATA));
+    }
+
+    WRITE_REGISTER_ULONG((PULONG)&Port->InterruptStatus, 0x00000001);
+  }
+
+  if ( PortInterruptStatus.FisPioSetupInterrupt )  {
+    DPRINT("AhciInterruptRoutine: FIS_PIO_SETUP\n");
+    WRITE_REGISTER_ULONG((PULONG)&Port->InterruptStatus, 0x00000002);
+  }
+
+  if ( PortInterruptStatus.FisDmaSetupInterrupt )  {
+    DPRINT("AhciInterruptRoutine: FIS_DMA_SETUP\n");
+    WRITE_REGISTER_ULONG((PULONG)&Port->InterruptStatus, 0x00000004);
+  }
+
+  if ( PortInterruptStatus.FisSetDeviceBitsInterrupt )  {
+    DPRINT("AhciInterruptRoutine: FIS_SET_DEVICE_BITS\n");
+    WRITE_REGISTER_ULONG((PULONG)&Port->InterruptStatus, 0x00000008);
+  }
+
+  if ( PortInterruptStatus.FisUnknownInterrupt )  {
+    DPRINT("AhciInterruptRoutine: FIS_UNKNOWN\n");
+    WRITE_REGISTER_ULONG((PULONG)&Port->InterruptStatus, 0x00000010);
+  }
+
+  if ( PortInterruptStatus.Overflow )  {
+    DPRINT("AhciInterruptRoutine: Overflow\n");
+  }
+
+  if ( PortInterruptStatus.InterfaceFatalError || 
+       PortInterruptStatus.HostBusDataError    ||
+       PortInterruptStatus.HostBusFatalError   ||
+       PortInterruptStatus.TaskFileError )
+  {
+    DPRINT("AhciInterruptRoutine: FatalError\n");
+  }
+
+  if ( PortInterruptStatus.InterfaceNonFatalError )  {
+    DPRINT("AhciInterruptRoutine: NonFatalError\n");
+  }
+
+  if ( PortInterruptStatus.DescriptorProcessed )  {
+    DPRINT("AhciInterruptRoutine: DescriptorProcessed\n");
+  }
+
+  if ( PortInterruptStatus.PortConnectChange )  {
+    DPRINT("AhciInterruptRoutine: PortConnectChange\n");
+  }
+
+  if ( PortInterruptStatus.DeviceMechanicalPresence )  {
+    DPRINT("AhciInterruptRoutine: DeviceMechanicalPresence\n");
+  }
+
+  if ( PortInterruptStatus.PhyRdyChange )  {
+    DPRINT("AhciInterruptRoutine: PhyRdyChange\n");
+  }
+
+  if ( PortInterruptStatus.IncorrectPortMultiplier )  {
+    DPRINT("AhciInterruptRoutine: IncorrectPortMultiplier\n");
+  }
+
+  if ( PortInterruptStatus.ColdPortDetect )  {
+    DPRINT("AhciInterruptRoutine: ColdPortDetect\n");
+  }
+
+  if ( Srb )
+  {
+    if ( Srb->SrbFlags & SRB_FLAGS_DATA_IN )
+    {
+      DPRINT("AhciInterruptRoutine: Srb->DataBuffer         - %x\n", Srb->DataBuffer);
+      DPRINT("AhciInterruptRoutine: Srb->DataTransferLength - %x\n", Srb->DataTransferLength);
+
+      RtlMoveMemory((PVOID)Srb->DataBuffer,
+                    (PVOID)ChannelPdoExtension->AhciInterface.DmaBuffer,
+                    Srb->DataTransferLength);
+    }
+  }
+
+  Status = STATUS_SUCCESS;
+  DPRINT("AhciInterruptRoutine: return - %p\n", Status);
+  return Status;
 }
 
 NTSTATUS NTAPI   //  PAHCI_START_IO  AhciStartIo;
