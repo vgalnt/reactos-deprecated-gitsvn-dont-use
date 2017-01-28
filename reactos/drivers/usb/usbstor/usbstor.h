@@ -85,14 +85,19 @@ typedef struct {
     KSPIN_LOCK IrpListLock;                                                              // irp list lock
     LIST_ENTRY IrpListHead;                                                              // irp list head
     ULONG IrpPendingCount;                                                               // count of irp pending
-    PSCSI_REQUEST_BLOCK ActiveSrb;                                                       // stores the current active SRB
+    PIRP CurrentIrp;
+    struct _URB_BULK_OR_INTERRUPT_TRANSFER Urb;
+    PSCSI_REQUEST_BLOCK CurrentSrb;                                                       // stores the current active SRB
     KEVENT NoPendingRequests;                                                            // set if no pending or in progress requests
     ULONG InstanceCount;                                                                 // pdo instance count
     ULONG DriverFlags;                                                                   // 1 - BulkOnly
+    ULONG Flags;
     KSPIN_LOCK StorSpinLock;
     KEVENT RemoveDeviceEvent;
     KEVENT TimeOutEvent;
     LONG DeviceRefCount;
+    USBSTOR_BULK_ONLY_BUFFER BulkBuffer;                                                 // Transfer Buffer CBW/CSW
+    ULONG RetryCount;
 
     BOOLEAN IrpListFreeze;                                                               // if true the irp list is freezed
 } FDO_DEVICE_EXTENSION, *PFDO_DEVICE_EXTENSION;
