@@ -63,7 +63,7 @@ USBSTOR_AddDevice(
     //
     // init timer
     //
-    IoInitializeTimer(DeviceObject, USBSTOR_TimerRoutine, (PVOID)DeviceExtension);
+    IoInitializeTimer(DeviceObject, USBSTOR_Timer, NULL);
 
     //
     // did attaching fail
