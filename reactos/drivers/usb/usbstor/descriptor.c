@@ -491,7 +491,7 @@ USBSTOR_GetPipeHandles(
     //
     // no enumerate all pipes and extract bulk-in / bulk-out pipe handle
     //
-    for(Index = 0; Index < DeviceExtension->InterfaceInformation->NumberOfPipes; Index++)
+    for (Index = 0; Index < DeviceExtension->InterfaceInformation->NumberOfPipes; Index++)
     {
         //
         // check pipe type

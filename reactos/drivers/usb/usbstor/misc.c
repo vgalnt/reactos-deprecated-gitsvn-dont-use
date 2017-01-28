@@ -468,7 +468,7 @@ USBSTOR_IsFloppy(
     //
     Length = FormatHeader->CapacityLength;
     Descriptor = (PUFI_CAPACITY_DESCRIPTOR)(FormatHeader + 1);
-    for(Index = 0; Index < Length / sizeof(UFI_CAPACITY_DESCRIPTOR); Index++)
+    for (Index = 0; Index < Length / sizeof(UFI_CAPACITY_DESCRIPTOR); Index++)
     {
         //
         // blocks are little endian format

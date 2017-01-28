@@ -249,7 +249,7 @@ USBSTOR_GetFieldLength(
     //
     // scan the field and return last position which contains a valid character
     //
-    for(Index = 0; Index < MaxLength; Index++)
+    for (Index = 0; Index < MaxLength; Index++)
     {
         if (Name[Index] != ' ')
         {

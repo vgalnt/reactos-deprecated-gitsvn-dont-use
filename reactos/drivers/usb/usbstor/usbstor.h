@@ -47,7 +47,7 @@ C_ASSERT(sizeof(UFI_INQUIRY_CMD) == 12);
 //
 // UFI INQUIRY command response
 //
-typedef struct{
+typedef struct {
     UCHAR DeviceType;                                                // device type
     UCHAR RMB;                                                       // removable media bit
     UCHAR Version;                                                   // contains version 0x00
@@ -61,11 +61,10 @@ typedef struct{
 
 C_ASSERT(sizeof(UFI_INQUIRY_RESPONSE) == 36);
 
-typedef struct __COMMON_DEVICE_EXTENSION__
-{
+typedef struct __COMMON_DEVICE_EXTENSION__ {
     BOOLEAN IsFDO;
 
-}USBSTOR_COMMON_DEVICE_EXTENSION, *PUSBSTOR_COMMON_DEVICE_EXTENSION;
+} USBSTOR_COMMON_DEVICE_EXTENSION, *PUSBSTOR_COMMON_DEVICE_EXTENSION;
 
 typedef struct {
     USBSTOR_COMMON_DEVICE_EXTENSION Common;                                              // common device extension
@@ -121,8 +120,8 @@ typedef struct {
 #define USB_BULK_RESET_DEVICE             0xFF
 
 #include <pshpack1.h>
-typedef struct
-{
+
+typedef struct {
     ULONG Signature;                                                 // CBW signature
     ULONG Tag;                                                       // CBW Tag of operation
     ULONG DataTransferLength;                                        // data transfer length
@@ -130,30 +129,27 @@ typedef struct
     UCHAR LUN;                                                       // lun unit
     UCHAR CommandBlockLength;                                        // Command block length
     UCHAR CommandBlock[16];
-}CBW, *PCBW;
+} CBW, *PCBW;
 
 C_ASSERT(sizeof(CBW) == 31);
-
 
 #define CBW_SIGNATURE 0x43425355
 #define CSW_SIGNATURE 0x53425355
 
 #define MAX_LUN 0xF
 
-typedef struct
-{
+typedef struct {
     ULONG Signature;                                                 // CSW signature
     ULONG Tag;                                                       // CSW tag
     ULONG DataResidue;                                               // CSW data transfer diff
     UCHAR Status;                                                    // CSW status
-}CSW, *PCSW;
+} CSW, *PCSW;
 
 //--------------------------------------------------------------------------------------------------------------------------------------------
 //
 // UFI read cmd
 //
-typedef struct
-{
+typedef struct {
     UCHAR Code;                                                      // operation code
     UCHAR LUN;                                                       // lun
     UCHAR LogicalBlockByte0;                                         // lba byte 0
@@ -164,7 +160,7 @@ typedef struct
     UCHAR ContiguousLogicBlocksByte0;                                // msb contiguous logic blocks byte
     UCHAR ContiguousLogicBlocksByte1;                                // msb contiguous logic blocks
     UCHAR Reserved1[3];                                              // reserved 0x00
-}UFI_READ_WRITE_CMD;
+} UFI_READ_WRITE_CMD;
 
 C_ASSERT(sizeof(UFI_READ_WRITE_CMD) == 12);
 
@@ -174,15 +170,14 @@ C_ASSERT(sizeof(UFI_READ_WRITE_CMD) == 12);
 //
 // UFI read capacity cmd
 //
-typedef struct
-{
+typedef struct {
     UCHAR Code;                                                      // operation code 0x25
     UCHAR LUN;                                                       // lun address
     UCHAR LBA[4];                                                   // logical block address, should be zero
     UCHAR Reserved1[2];                                              // reserved 0x00
     UCHAR PMI;                                                       // PMI = 0x00
     UCHAR Reserved2[3];                                              // reserved 0x00
-}UFI_CAPACITY_CMD, *PUFI_CAPACITY_CMD;
+} UFI_CAPACITY_CMD, *PUFI_CAPACITY_CMD;
 
 C_ASSERT(sizeof(UFI_CAPACITY_CMD) == 12);
 
@@ -191,11 +186,10 @@ C_ASSERT(sizeof(UFI_CAPACITY_CMD) == 12);
 //
 // UFI Read Capacity command response
 //
-typedef struct
-{
+typedef struct {
     ULONG LastLogicalBlockAddress;                                   // last logical block address
     ULONG BlockLength;                                               // block length in bytes
-}UFI_CAPACITY_RESPONSE, *PUFI_CAPACITY_RESPONSE;
+} UFI_CAPACITY_RESPONSE, *PUFI_CAPACITY_RESPONSE;
 
 #define UFI_READ_CAPACITY_CMD_LEN 0xA
 C_ASSERT(sizeof(UFI_CAPACITY_RESPONSE) == 8);
@@ -204,8 +198,7 @@ C_ASSERT(sizeof(UFI_CAPACITY_RESPONSE) == 8);
 //
 // UFI sense mode cmd
 //
-typedef struct
-{
+typedef struct {
     UCHAR Code;                                                      // operation code
     UCHAR LUN;                                                       // lun address
     UCHAR PageCode:6;                                                // page code selector
@@ -213,14 +206,13 @@ typedef struct
     UCHAR Reserved[4];                                               // reserved 0x00
     USHORT AllocationLength;                                         // parameters length
     UCHAR Reserved1[3];
-}UFI_SENSE_CMD, *PUFI_SENSE_CMD;
+} UFI_SENSE_CMD, *PUFI_SENSE_CMD;
 
 C_ASSERT(sizeof(UFI_SENSE_CMD) == 12);
 
 #define UFI_SENSE_CMD_LEN (6)
 
-typedef struct
-{
+typedef struct {
     USHORT ModeDataLength;                                           // length of parameters for sense cmd
     UCHAR MediumTypeCode;                                            // 00 for mass storage, 0x94 for floppy
     UCHAR WP:1;                                                      // write protect bit
@@ -228,20 +220,20 @@ typedef struct
     UCHAR DPOFUA:1;                                                  // should be zero
     UCHAR Reserved2:4;                                               // reserved
     UCHAR Reserved[4];                                               // reserved
-}UFI_MODE_PARAMETER_HEADER, *PUFI_MODE_PARAMETER_HEADER;
+} UFI_MODE_PARAMETER_HEADER, *PUFI_MODE_PARAMETER_HEADER;
 
 
 C_ASSERT(sizeof(UFI_MODE_PARAMETER_HEADER) == 8);
 
-typedef struct
-{
+typedef struct {
     UCHAR PC;
     UCHAR PageLength;
     UCHAR Reserved1;
     UCHAR ITM;
     UCHAR Flags;
     UCHAR Reserved[3];
-}UFI_TIMER_PROTECT_PAGE, *PUFI_TIMER_PROTECT_PAGE;
+} UFI_TIMER_PROTECT_PAGE, *PUFI_TIMER_PROTECT_PAGE;
+
 C_ASSERT(sizeof(UFI_TIMER_PROTECT_PAGE) == 8);
 
 //--------------------------------------------------------------------------------------------------------------------------------------------
@@ -249,67 +241,59 @@ C_ASSERT(sizeof(UFI_TIMER_PROTECT_PAGE) == 8);
 // UFI read capacity cmd
 //
 
-typedef struct
-{
+typedef struct {
     UCHAR Code;
     UCHAR LUN;
     UCHAR Reserved[5];
     UCHAR AllocationLengthMsb;
     UCHAR AllocationLengthLsb;
     UCHAR Reserved1[3];
-}UFI_READ_FORMAT_CAPACITY, *PUFI_READ_FORMAT_CAPACITY;
+} UFI_READ_FORMAT_CAPACITY, *PUFI_READ_FORMAT_CAPACITY;
 
 C_ASSERT(sizeof(UFI_READ_FORMAT_CAPACITY) == 12);
 
 #define UFI_READ_FORMAT_CAPACITY_CMD_LEN (10)
 
-typedef struct
-{
+typedef struct {
     UCHAR Reserved1;
     UCHAR Reserved2;
     UCHAR Reserved3;
     UCHAR CapacityLength;
-}UFI_CAPACITY_FORMAT_HEADER, *PUFI_CAPACITY_FORMAT_HEADER;
+} UFI_CAPACITY_FORMAT_HEADER, *PUFI_CAPACITY_FORMAT_HEADER;
 
 C_ASSERT(sizeof(UFI_CAPACITY_FORMAT_HEADER) == 4);
 
-typedef struct
-{
+typedef struct {
     ULONG BlockCount;
     UCHAR Code;
     UCHAR BlockLengthByte0;
     UCHAR BlockLengthByte1;
     UCHAR BlockLengthByte2;
-}UFI_CAPACITY_DESCRIPTOR, *PUFI_CAPACITY_DESCRIPTOR;
+} UFI_CAPACITY_DESCRIPTOR, *PUFI_CAPACITY_DESCRIPTOR;
 
 #define UNFORMATTED_MEDIA_CODE_DESCRIPTORY_TYPE (1)
 #define FORMAT_MEDIA_CODE_DESCRIPTOR_TYPE      (2)
 #define CARTRIDGE_MEDIA_CODE_DESCRIPTOR_TYPE   (3)
-
-
-
 
 //--------------------------------------------------------------------------------------------------------------------------------------------
 //
 // UFI test unit command
 //
 
-typedef struct
-{
+typedef struct {
     UCHAR Code;                                                       // operation code 0x00
     UCHAR LUN;                                                        // lun
     UCHAR Reserved[10];                                               // reserved 0x00
-}UFI_TEST_UNIT_CMD, *PUFI_TEST_UNIT_CMD;
+} UFI_TEST_UNIT_CMD, *PUFI_TEST_UNIT_CMD;
 
 C_ASSERT(sizeof(UFI_TEST_UNIT_CMD) == 12);
 
 #define UFI_TEST_UNIT_CMD_LEN (6)
 
 //-------------------------------------------------------------------------------------------------------------------------------------------
-typedef struct
-{
+typedef struct {
     UCHAR Bytes[16];
-}UFI_UNKNOWN_CMD, *PUFI_UNKNOWN_CMD;
+} UFI_UNKNOWN_CMD, *PUFI_UNKNOWN_CMD;
 
 //---------------------------------------------------------------------
 //

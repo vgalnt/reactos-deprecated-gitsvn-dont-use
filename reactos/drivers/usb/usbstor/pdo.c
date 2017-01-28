@@ -171,7 +171,7 @@ CopyField(
 {
     ULONG Index;
 
-    for(Index = 0; Index < MaxLength; Index++)
+    for (Index = 0; Index < MaxLength; Index++)
     {
         if (Name[Index] <= ' ' || Name[Index] >= 0x7F /* last printable ascii character */ ||  Name[Index] == ',')
         {

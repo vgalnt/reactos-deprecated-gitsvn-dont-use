@@ -91,7 +91,7 @@ USBSTOR_FdoHandleDeviceRelations(
     //
     // add device objects
     //
-    for(Index = 0; Index < max(DeviceExtension->MaxLUN, 1); Index++)
+    for (Index = 0; Index < max(DeviceExtension->MaxLUN, 1); Index++)
     {
         if (DeviceExtension->ChildPDO[Index])
         {
@@ -135,7 +135,7 @@ USBSTOR_FdoHandleRemoveDevice(
     DPRINT("Handling FDO removal %p\n", DeviceObject);
 
     /* FIXME: wait for devices finished processing */
-    for(Index = 0; Index < 16; Index++)
+    for (Index = 0; Index < 16; Index++)
     {
         if (DeviceExtension->ChildPDO[Index] != NULL)
         {
