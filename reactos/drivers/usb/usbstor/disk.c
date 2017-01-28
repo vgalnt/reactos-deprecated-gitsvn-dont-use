@@ -592,8 +592,10 @@ USBSTOR_HandleDeviceControl(
 
         if (Capabilities)
         {
-            Capabilities->MaximumTransferLength = MAXULONG;
-            Capabilities->MaximumPhysicalPages = 25;
+            //Capabilities->MaximumTransferLength = MAXULONG;
+            Capabilities->MaximumTransferLength = 0x10000;
+            //Capabilities->MaximumPhysicalPages = 25;
+            Capabilities->MaximumPhysicalPages = 17;
             Capabilities->SupportedAsynchronousEvents = 0;
             Capabilities->AlignmentMask = 0;
             Capabilities->TaggedQueuing = FALSE;
@@ -648,6 +650,8 @@ USBSTOR_HandleDeviceControl(
 
         /* Hack for IoReadPartitionTable call in disk.sys */
         ScsiInquiryData->RemovableMedia = ((ScsiInquiryData->DeviceType != DIRECT_ACCESS_DEVICE) ? ((UFIInquiryResponse->RMB & 0x80) ? 1 : 0) : 0);
+        // should be:
+        //ScsiInquiryData->RemovableMedia = ((ScsiInquiryData->DeviceType == DIRECT_ACCESS_DEVICE) ? ((UFIInquiryResponse->RMB & 0x80) ? 1 : 0) : 0);
 
         ScsiInquiryData->Versions = 0x04;
         ScsiInquiryData->ResponseDataFormat = 0x02;
