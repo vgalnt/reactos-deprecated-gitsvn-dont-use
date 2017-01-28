@@ -14,6 +14,44 @@
 #define NDEBUG
 #include <debug.h>
 
+BOOLEAN
+NTAPI
+IsRequestValid(PIRP Irp)
+{
+    ULONG TransferLength;
+    PIO_STACK_LOCATION IoStack;
+    PSCSI_REQUEST_BLOCK Srb;
+
+    DPRINT("IsRequestValid: ... \n");
+
+    IoStack = Irp->Tail.Overlay.CurrentStackLocation;
+    Srb = IoStack->Parameters.Scsi.Srb;
+
+    if (Srb->SrbFlags & SRB_FLAGS_UNSPECIFIED_DIRECTION)
+    {
+        if ((Srb->SrbFlags & SRB_FLAGS_UNSPECIFIED_DIRECTION) == SRB_FLAGS_UNSPECIFIED_DIRECTION)
+        {
+            DPRINT("IsRequestValid: Srb->SrbFlags - %p\n", Srb->SrbFlags);
+            return 0;
+        }
+
+        TransferLength = Srb->DataTransferLength;
+
+        if (!Irp->MdlAddress || !TransferLength || TransferLength > 0x10000) // FIXME consatnt (default MaximumTransferLength)
+        {
+            DPRINT("IsRequestValid: Not valid value !\n");
+            return 0;
+        }
+    }
+    else if (Srb->DataTransferLength || Srb->DataBuffer || Irp->MdlAddress)
+    {
+        DPRINT("IsRequestValid: Not valid value !\n");
+        return 0;
+    }
+
+    return TRUE;
+}
+
 NTSTATUS
 USBSTOR_HandleInternalDeviceControl(
     IN PDEVICE_OBJECT DeviceObject,
