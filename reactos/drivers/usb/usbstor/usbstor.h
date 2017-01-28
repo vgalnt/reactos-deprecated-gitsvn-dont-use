@@ -133,6 +133,9 @@ typedef struct {
     PIRP CurrentIrp;
     struct _URB_BULK_OR_INTERRUPT_TRANSFER Urb;
     PSCSI_REQUEST_BLOCK CurrentSrb;                                                       // stores the current active SRB
+    ULONG SrbTimeOutValue;
+    SCSI_REQUEST_BLOCK SenseSrb;
+    CDB CurrentCdb;
     KEVENT NoPendingRequests;                                                            // set if no pending or in progress requests
     ULONG InstanceCount;                                                                 // pdo instance count
     ULONG DriverFlags;                                                                   // 1 - BulkOnly
@@ -143,7 +146,6 @@ typedef struct {
     LONG DeviceRefCount;
     USBSTOR_BULK_ONLY_BUFFER BulkBuffer;                                                 // Transfer Buffer CBW/CSW
     ULONG RetryCount;
-
     BOOLEAN IrpListFreeze;                                                               // if true the irp list is freezed
 } FDO_DEVICE_EXTENSION, *PFDO_DEVICE_EXTENSION;
 
@@ -213,6 +215,19 @@ typedef struct {
 #define USB_PROTOCOL_ALAUDA       0xF4    /* Alauda chipsets */
 #define USB_PROTOCOL_KARMA        0xF5    /* Rio Karma */
 #define USB_PROTOCOL_VENDOR       0xFF    /* Use vendor specific */
+
+/* Correspond constants from scsi.h - Inquiry defines, DeviceType field. */
+
+#define USBSTOR_SCSI_DEVICE_TYPE_DIRECT         0x00  /* disks */
+#define USBSTOR_SCSI_DEVICE_TYPE_SEQUENTIAL     0x01  /* tapes */
+#define USBSTOR_SCSI_DEVICE_TYPE_PRINTER        0x02  /* printers */
+#define USBSTOR_SCSI_DEVICE_TYPE_PROCESSOR      0x03  /* scanners, printers, etc */
+#define USBSTOR_SCSI_DEVICE_TYPE_WORM           0x04  /* worms */
+#define USBSTOR_SCSI_DEVICE_TYPE_CDROM          0x05  /* cdroms */
+#define USBSTOR_SCSI_DEVICE_TYPE_SCANNER        0x06  /* scanners */
+#define USBSTOR_SCSI_DEVICE_TYPE_OPTICAL        0x07  /* optical disks */
+#define USBSTOR_SCSI_DEVICE_TYPE_MEDIA_CHANGER  0x08  /* jukebox */
+#define USBSTOR_SCSI_DEVICE_TYPE_UNKNOWN        0x1F 
 
 //--------------------------------------------------------------------------------------------------------------------------------------------
 //
