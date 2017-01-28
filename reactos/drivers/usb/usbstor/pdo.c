@@ -999,7 +999,7 @@ USBSTOR_IsFloppyDevice(
 
 NTSTATUS
 USBSTOR_CreatePDO(
-    IN PDEVICE_OBJECT DeviceObject,
+    IN PDEVICE_OBJECT FdoDevice,
     IN UCHAR LUN)
 {
     PDEVICE_OBJECT PDO;
@@ -1010,7 +1010,7 @@ USBSTOR_CreatePDO(
     //
     // get device extension
     //
-    FDODeviceExtension = (PFDO_DEVICE_EXTENSION)DeviceObject->DeviceExtension;
+    FDODeviceExtension = (PFDO_DEVICE_EXTENSION)FdoDevice->DeviceExtension;
 
 
     //
@@ -1035,7 +1035,7 @@ USBSTOR_CreatePDO(
     //
     // patch the stack size
     //
-    PDO->StackSize = DeviceObject->StackSize;
+    PDO->StackSize = FdoDevice->StackSize;
 
     //
     // get device extension
@@ -1047,7 +1047,7 @@ USBSTOR_CreatePDO(
     //
     RtlZeroMemory(PDODeviceExtension, sizeof(PDO_DEVICE_EXTENSION));
     PDODeviceExtension->Common.IsFDO = FALSE;
-    PDODeviceExtension->LowerDeviceObject = DeviceObject;
+    PDODeviceExtension->LowerDeviceObject = FdoDevice;
     PDODeviceExtension->PDODeviceObject = &FDODeviceExtension->ChildPDO[LUN];
     PDODeviceExtension->Self = PDO;
     PDODeviceExtension->LUN = LUN;

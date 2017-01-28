@@ -24,8 +24,8 @@ USBSTOR_AddDevice(
     IN PDEVICE_OBJECT PhysicalDeviceObject)
 {
     NTSTATUS Status;
-    PDEVICE_OBJECT DeviceObject;
-    PFDO_DEVICE_EXTENSION DeviceExtension;
+    PDEVICE_OBJECT FdoDevice;
+    PFDO_DEVICE_EXTENSION FDODeviceExtension;
 
     //
     // lets create the device
@@ -50,37 +50,49 @@ USBSTOR_AddDevice(
     //
     // get device extension
     //
-    DeviceExtension = (PFDO_DEVICE_EXTENSION)DeviceObject->DeviceExtension;
-    ASSERT(DeviceExtension);
+    FDODeviceExtension = (PFDO_DEVICE_EXTENSION)FdoDevice->DeviceExtension;
+    ASSERT(FDODeviceExtension);
 
     //
     // zero device extension
     //
-    RtlZeroMemory(DeviceExtension, sizeof(FDO_DEVICE_EXTENSION));
+    RtlZeroMemory(FDODeviceExtension, sizeof(FDO_DEVICE_EXTENSION));
 
     //
     // initialize device extension
     //
-    DeviceExtension->Common.IsFDO = TRUE;
-    DeviceExtension->FunctionalDeviceObject = DeviceObject;
-    DeviceExtension->PhysicalDeviceObject = PhysicalDeviceObject;
-    DeviceExtension->LowerDeviceObject = IoAttachDeviceToDeviceStack(DeviceObject,
+    FDODeviceExtension->Common.IsFDO = TRUE;
+    FDODeviceExtension->FunctionalDeviceObject = FdoDevice;
+    FDODeviceExtension->PhysicalDeviceObject = PhysicalDeviceObject;
+    FDODeviceExtension->LowerDeviceObject = IoAttachDeviceToDeviceStack(FdoDevice,
                                                                      PhysicalDeviceObject);
+
+    FDODeviceExtension->DeviceRefCount = 1;
+
+    KeInitializeSpinLock(&FDODeviceExtension->StorSpinLock);
+
+    KeInitializeEvent(&FDODeviceExtension->RemoveDeviceEvent,
+                      SynchronizationEvent,
+                      FALSE);
+
+    KeInitializeEvent(&FDODeviceExtension->TimeOutEvent,
+                      SynchronizationEvent,
+                      FALSE);
 
     //
     // init timer
     //
-    IoInitializeTimer(DeviceObject, USBSTOR_Timer, NULL);
+    IoInitializeTimer(FdoDevice, USBSTOR_Timer, NULL);
 
     //
     // did attaching fail
     //
-    if (!DeviceExtension->LowerDeviceObject)
+    if (!FDODeviceExtension->LowerDeviceObject)
     {
         //
         // device removed
         //
-        IoDeleteDevice(DeviceObject);
+        IoDeleteDevice(FdoDevice);
 
         return STATUS_DEVICE_REMOVED;
     }
@@ -88,12 +100,12 @@ USBSTOR_AddDevice(
     //
     // set device flags
     //
-    DeviceObject->Flags |= DO_BUFFERED_IO | DO_POWER_PAGABLE;
+    FdoDevice->Flags |= DO_DIRECT_IO | DO_POWER_PAGABLE;
 
     //
     // device is initialized
     //
-    DeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
+    FdoDevice->Flags &= ~DO_DEVICE_INITIALIZING;
 
 
     //

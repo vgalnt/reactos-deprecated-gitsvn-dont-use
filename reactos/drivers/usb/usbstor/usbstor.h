@@ -90,6 +90,11 @@ typedef struct {
     KEVENT NoPendingRequests;                                                            // set if no pending or in progress requests
     ULONG InstanceCount;                                                                 // pdo instance count
     ULONG DriverFlags;                                                                   // 1 - BulkOnly
+    KSPIN_LOCK StorSpinLock;
+    KEVENT RemoveDeviceEvent;
+    KEVENT TimeOutEvent;
+    LONG DeviceRefCount;
+
     BOOLEAN IrpListFreeze;                                                               // if true the irp list is freezed
 } FDO_DEVICE_EXTENSION, *PFDO_DEVICE_EXTENSION;
 
