@@ -19,6 +19,18 @@
 
 NTSTATUS
 NTAPI
+USBSTOR_SyncCompletionRoutine(
+    PDEVICE_OBJECT DeviceObject,
+    PIRP Irp,
+    PVOID Context)
+{
+    DPRINT("USBSTOR_SyncCompletionRoutine: ... \n");
+    KeSetEvent((PRKEVENT)Context, IO_NO_INCREMENT, FALSE);
+    return STATUS_MORE_PROCESSING_REQUIRED;
+}
+
+NTSTATUS
+NTAPI
 USBSTOR_AddDevice(
     IN PDRIVER_OBJECT DriverObject,
     IN PDEVICE_OBJECT PhysicalDeviceObject)

@@ -483,4 +483,13 @@ USBSTOR_Timer(
     IN PDEVICE_OBJECT FdoDevice,
     IN PVOID Context);
 
+/* usbstor.c */
+
+NTSTATUS
+NTAPI
+USBSTOR_SyncCompletionRoutine(
+    PDEVICE_OBJECT DeviceObject,
+    PIRP Irp,
+    PVOID Context);
+
 #endif /* _USBSTOR_H_ */
