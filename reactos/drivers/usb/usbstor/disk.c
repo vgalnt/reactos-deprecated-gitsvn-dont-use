@@ -32,7 +32,7 @@ USBSTOR_HandleInternalDeviceControl(
     //
     // get request block
     //
-    Request = (PSCSI_REQUEST_BLOCK)IoStack->Parameters.Others.Argument1;
+    Request = IoStack->Parameters.Scsi.Srb;
 
     //
     // sanity check
@@ -55,41 +55,29 @@ USBSTOR_HandleInternalDeviceControl(
         {
             DPRINT("SRB_FUNCTION_EXECUTE_SCSI\n");
 
-            //
-            // check if request is valid
-            //
-            if (Request->SrbFlags & (SRB_FLAGS_DATA_IN | SRB_FLAGS_DATA_OUT))
+            if (!IsRequestValid(Irp))
             {
-                //
-                // data is transferred with this irp
-                //
-                if ((Request->SrbFlags & (SRB_FLAGS_DATA_IN | SRB_FLAGS_DATA_OUT)) == (SRB_FLAGS_DATA_IN | SRB_FLAGS_DATA_OUT) ||
-                    Request->DataTransferLength == 0 ||
-                    Irp->MdlAddress == NULL)
-                {
-                    //
-                    // invalid parameter
-                    //
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
+                DPRINT1("USBSTOR_HandleInternalDeviceControl: Request not valid !!!\n");
+                //ASSERT(FALSE);
+                Status = STATUS_INVALID_PARAMETER;
+                Irp->IoStatus.Status = Status;
+                IoCompleteRequest(Irp, IO_NO_INCREMENT);
+                return Status;
             }
-            else
+
+            if (Request->Cdb[0] == SCSIOP_MODE_SENSE)
             {
-                //
-                // sense buffer request
-                //
-                if (Request->DataTransferLength ||
-                    Request->DataBuffer ||
-                    Irp->MdlAddress)
-                {
-                    //
-                    // invalid parameter
-                    //
-                    Status = STATUS_INVALID_PARAMETER;
-                    break;
-                }
+                DPRINT("USBSTOR_Scsi: SRB_FUNCTION_EXECUTE_SCSI - FIXME SCSIOP_MODE_SENSE\n");
+                // FIXME Get from registry WriteProtect for StorageDevicePolicies;
+                // L"\\Registry\\Machine\\System\\CurrentControlSet\\Control\\StorageDevicePolicies"
+                // QueryTable[0].Name = L"WriteProtect"
             }
+
+            IoStack->Parameters.Others.Argument2 = PDODeviceExtension;
+
+            // mark irp pending
+            IoMarkIrpPending(Irp);
+            Request->SrbStatus = SRB_STATUS_PENDING;
 
             //
             // add the request
@@ -99,7 +87,10 @@ USBSTOR_HandleInternalDeviceControl(
                 //
                 // irp was not added to the queue
                 //
-                IoStartPacket(PDODeviceExtension->LowerDeviceObject, Irp, &Request->QueueSortKey, USBSTOR_CancelIo);
+                IoStartPacket(PDODeviceExtension->LowerDeviceObject,
+                              Irp,
+                              &Request->QueueSortKey,
+                              USBSTOR_CancelIo);
             }
 
             //
