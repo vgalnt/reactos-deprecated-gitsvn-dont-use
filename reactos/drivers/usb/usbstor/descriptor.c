@@ -311,7 +311,7 @@ USBSTOR_ScanConfigurationDescriptor(
             break;
         }
 
-    }while(TRUE);
+    } while (TRUE);
 
     //
     // check if everything has been found
