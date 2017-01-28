@@ -502,8 +502,10 @@ USBSTOR_HandleQueryProperty(
         //
         AdapterDescriptor->Version = sizeof(STORAGE_ADAPTER_DESCRIPTOR);
         AdapterDescriptor->Size = sizeof(STORAGE_ADAPTER_DESCRIPTOR);
-        AdapterDescriptor->MaximumTransferLength = MAXULONG; //FIXME compute some sane value
-        AdapterDescriptor->MaximumPhysicalPages = 25; //FIXME compute some sane value
+        //AdapterDescriptor->MaximumTransferLength = MAXULONG; //FIXME compute some sane value
+        AdapterDescriptor->MaximumTransferLength = 0x10000;
+        //AdapterDescriptor->MaximumPhysicalPages = 25; //FIXME compute some sane value
+        AdapterDescriptor->MaximumPhysicalPages = 17;
         AdapterDescriptor->AlignmentMask = 0;
         AdapterDescriptor->AdapterUsesPio = FALSE;
         AdapterDescriptor->AdapterScansDown = FALSE;
